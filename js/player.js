@@ -1,5 +1,5 @@
 // Player effects: one audio element, timers and word timing around the pure reducer.
-import { reduce, initialState, generationOrder } from './player-state.js';
+import { reduce, initialState, generationOrder, audioWindow } from './player-state.js';
 import { wordTimings, wordAt } from './sentences.js';
 import { silentWav } from './wav.js';
 import * as tts from './tts.js';
@@ -129,11 +129,13 @@ export function createPlayer({ voiceFor, onChange, onWord, onError, onSave }) {
   }
 
   function prioritize() {
-    const order = generationOrder(state, ctx).map((i) => {
+    const item = (i) => {
       const s = ctx.sentences[i];
       return { text: s.text, voice: voiceFor(s.speaker) };
-    });
-    tts.prioritize(order);
+    };
+    // Memory first: the window keeps replay instant and next or previous near-instant.
+    tts.setWindow(audioWindow(state, ctx).map(item));
+    tts.prioritize(generationOrder(state, ctx).map(item));
   }
 
   function scheduleSave() {

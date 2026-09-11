@@ -1,12 +1,16 @@
 // Script parsing, draft-from-slides and the AI prompt. Pure functions.
 import { splitSentences } from './sentences.js';
+import { cleanPages, stripPua } from './slide-text.js';
 
 export const DEFAULT_PRESENTER = 'You';
 
 const FENCE = /^\s*(```|~~~)/;
 const SEPARATOR = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/;
 const MARKER = /^[[(]?slide\s+(\d{1,3})[\])]?(?:\s*[:\-\u2013\u2014|)]\s*(.*?)|\s+\((.*)\)|)\s*\.?\s*$/i;
-const SPEAKER = /^([A-Z][A-Za-z'.-]*(?: [A-Z0-9][A-Za-z0-9'.-]*)?)\s*:\s*(.*)$/;
+// A name is one or two words that start with a capital, or with a letter from a script
+// without capitals (Persian, Arabic, Chinese, Hebrew): "Alex:", "Mary Ann:", "Zoë:", "فاطمة:".
+// U+200C and U+200D join the parts of a Persian name.
+const SPEAKER = /^([\p{Lu}\p{Lt}\p{Lo}][\p{L}\p{M}\u200C\u200D'.-]*(?: [\p{Lu}\p{Lt}\p{Lo}\p{N}][\p{L}\p{M}\p{N}\u200C\u200D'.-]*)?)\s*:\s*(.*)$/u;
 const NOT_SPEAKERS = new Set([
   'note', 'notes', 'tip', 'title', 'subtitle', 'transition', 'visual', 'image',
   'speaker notes', 'duration', 'time', 'timing', 'script', 'slide', 'http', 'https',
@@ -22,6 +26,20 @@ function cleanLine(line) {
   s = s.replace(/(^|[^\w])_(?!\s)([^_\n]+?)_(?!\w)/g, '$1$2');
   s = s.replace(/`/g, '');
   return s.trim();
+}
+
+/** True for words the script format uses as labels, never as presenter names. */
+export function isReservedName(name) {
+  return NOT_SPEAKERS.has(String(name).trim().toLowerCase());
+}
+
+/** What one raw script line is: 'fence', 'sep', 'blank', 'marker' (Slide N) or 'line'. */
+export function classifyLine(raw) {
+  if (FENCE.test(raw)) return 'fence';
+  if (SEPARATOR.test(raw)) return 'sep';
+  const clean = cleanLine(raw);
+  if (!clean) return 'blank';
+  return matchMarker(clean) ? 'marker' : 'line';
 }
 
 function matchMarker(clean) {
@@ -80,14 +98,46 @@ function countPrefixes(tokens) {
   return counts;
 }
 
+/**
+ * The names of a script written as "Name: line" throughout, in the order they first
+ * appear, even names used only once. Empty unless at least half of the spoken lines
+ * start with a name, so one slide title like "Agenda: Q3 plan" is not a presenter.
+ * Lines before the first Slide line are left out.
+ */
+export function labeledNames(text) {
+  const lines = stripPua(String(text ?? '')).replace(/\r\n?/g, '\n').split('\n');
+  let tokens = tokenize(selectSource(lines).lines);
+  const firstMarker = tokens.findIndex((t) => t.type === 'marker');
+  if (firstMarker >= 0) tokens = tokens.slice(firstMarker);
+  const spoken = tokens.filter((t) => t.type === 'line');
+  const labeled = spoken.filter((t) => speakerPrefix(t.text));
+  if (!labeled.length || labeled.length * 2 < spoken.length) return [];
+  return [...countPrefixes(tokens).keys()];
+}
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** "Name: rest" for a name the user gave, whatever its case: "alex:" is Alex. */
+function knownPrefix(names) {
+  const list = names.filter((n) => n && !NOT_SPEAKERS.has(n.toLowerCase())).sort((a, b) => b.length - a.length);
+  if (!list.length) return () => null;
+  const re = new RegExp(`^(${list.map(escapeRe).join('|')})\\s*:\\s*(.*)$`, 'iu');
+  return (text) => {
+    const m = re.exec(text);
+    return m ? { name: m[1], rest: m[2].trim() } : null;
+  };
+}
+
 function makeSpeakerResolver(tokens, names) {
   const counts = countPrefixes(tokens);
-  const known = new Map(names.filter(Boolean).map((n) => [n.trim().toLowerCase(), n.trim()]));
+  const given = names.filter(Boolean).map((n) => n.trim()).filter(Boolean);
+  const known = new Map(given.map((n) => [n.toLowerCase(), n]));
+  const byName = knownPrefix(given);
   return (text) => {
-    const p = speakerPrefix(text);
+    const p = byName(text) || speakerPrefix(text);
     if (!p) return null;
-    const given = known.get(p.name.toLowerCase());
-    if (given) return { name: given, rest: p.rest };
+    const saved = known.get(p.name.toLowerCase());
+    if (saved) return { name: saved, rest: p.rest };
     if ((counts.get(p.name) || 0) >= 2) return { name: p.name, rest: p.rest };
     return null;
   };
@@ -174,7 +224,8 @@ function spreadEvenly(paragraphs, slideCount) {
  */
 export function parseScript(text, { slideCount, names = [] } = {}) {
   const count = Math.max(1, slideCount || 1);
-  const lines = String(text ?? '').replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').split('\n');
+  // Private-use glyphs (symbol font bullets pasted from slides) never carry speech.
+  const lines = stripPua(String(text ?? '').replace(/^\uFEFF/, '')).replace(/\r\n?/g, '\n').split('\n');
   const source = selectSource(lines);
   let tokens = tokenize(source.lines);
   const firstMarker = tokens.findIndex((t) => t.type === 'marker');
@@ -235,7 +286,8 @@ export function parseScript(text, { slideCount, names = [] } = {}) {
     if (!s.paragraphs.length) warnings.push({ kind: 'empty-slide', slide: i, text: `Slide ${i + 1} has no script` });
   });
 
-  return { slides: outSlides, presenters, warnings, hasMarkers };
+  // speakers: the presenters named by a "Name:" prefix; empty when the script has none.
+  return { slides: outSlides, presenters, speakers: order.length ? presenters : [], warnings, hasMarkers };
 }
 
 /** Flatten a parsed script into the sentence list used by the player. */
@@ -258,25 +310,16 @@ function asSentence(line) {
 }
 
 /**
- * Footers and headers repeat on most pages; they are not worth saying out loud.
- * Returns a test: is this line on more than half of the pages?
- */
-function repeatedLines(pages) {
-  const seen = new Map();
-  for (const p of pages) for (const l of new Set(p.lines)) seen.set(l, (seen.get(l) || 0) + 1);
-  return (l) => pages.length >= 3 && seen.get(l) > pages.length / 2;
-}
-
-/**
- * Draft a one-presenter script from slide text.
+ * Draft a one-presenter script from slide text: every bullet becomes its own
+ * sentence, and headers or footers repeated across the deck are left out.
  * @param {{ title: string, lines: string[] }[]} pages
  */
 export function draftScript(pages) {
-  if (!pages.some((p) => p.title || p.lines.length)) return '';
-  const repeated = repeatedLines(pages);
-  return pages
+  const clean = cleanPages(pages);
+  if (!clean.some((p) => p.title || p.lines.length)) return '';
+  return clean
     .map((page, i) => {
-      const lines = page.lines.filter((l) => !repeated(l) && /\p{L}/u.test(l));
+      const lines = page.lines.filter((l) => /\p{L}/u.test(l));
       const body = [page.title, ...lines].map(asSentence).filter(Boolean).join(' ');
       return body ? `Slide ${i + 1}\n${body}` : `Slide ${i + 1}`;
     })
@@ -289,16 +332,15 @@ export function draftScript(pages) {
  */
 export function buildPrompt({ pages, count, names }) {
   const n = Math.max(1, Math.min(3, count || 1));
-  const labels = Array.from({ length: n }, (_, i) => (names[i] || '').trim() || `Presenter ${String.fromCharCode(65 + i)}`);
+  const labels = Array.from({ length: n }, (_, i) => (names[i] || '').trim() || `Presenter ${i + 1}`);
   const usePrefixes = n > 1 || Boolean((names[0] || '').trim());
   const who = n === 1 ? `one presenter (${labels[0]})` : `${n} presenters: ${labels.join(', ')}`;
   const example = usePrefixes
     ? ['Slide 1', `${labels[0]}: First sentence of the script.`, `${labels[n > 1 ? 1 : 0]}: Next sentence.`, '', 'Slide 2', `${labels[0]}: ...`]
     : ['Slide 1', 'First sentence of the script. Next sentence.', '', 'Slide 2', '...'];
-  const repeated = repeatedLines(pages);
-  const slideText = pages
+  const slideText = cleanPages(pages)
     .map((p, i) => {
-      const text = [p.title, ...p.lines.filter((l) => !repeated(l))].filter(Boolean).join(' / ');
+      const text = [p.title, ...p.lines].filter(Boolean).join(' / ');
       return `Slide ${i + 1}: ${text || '(no text on this slide)'}`;
     })
     .join('\n');

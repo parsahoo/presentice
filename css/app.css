@@ -1,63 +1,75 @@
 /* Presentice. A quiet rehearsal booth: the slide is the stage, the script reads like a teleprompter.
-   Neutrals are cool graphite. Presenter colors are the only hues in the interface. */
+   Neutrals are cool graphite, dark by default. Presenter colors are the only hues in the interface. */
 
+/* Dark is the default theme, whatever the system setting. theme.js stamps
+   data-theme on <html>; light is the alternative behind the header toggle. */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --bg: oklch(0.972 0.004 255);
-  --surface: oklch(0.995 0.002 255);
-  --sunken: oklch(0.948 0.005 255);
-  --line: oklch(0.885 0.006 255);
-  --line-strong: oklch(0.8 0.008 255);
-  --field-line: oklch(0.66 0.01 255);
-  --ink: oklch(0.23 0.015 260);
-  --ink-2: oklch(0.43 0.013 260);
-  --ink-3: oklch(0.52 0.012 260);
-  --on-ink: oklch(0.985 0.003 255);
-  --danger: oklch(0.5 0.17 25);
-  --focus: oklch(0.23 0.015 260);
-  --shadow-sm: 0 1px 2px oklch(0.2 0.02 260 / 0.1);
-  --shadow-slide: 0 1px 2px oklch(0.2 0.02 260 / 0.1), 0 12px 32px -8px oklch(0.2 0.02 260 / 0.22);
-  --shadow-pop: 0 2px 6px oklch(0.2 0.02 260 / 0.08), 0 24px 56px -16px oklch(0.2 0.02 260 / 0.35);
+  --bg: #0d0f13;
+  --panel: #12151b;
+  --panel-2: #171b22;
+  --line: #232a33;
+  --line-2: #3a4552;
+  --muted: #9aa4b1;
 
-  --p0: oklch(0.53 0.14 250);
-  --p1: oklch(0.58 0.15 50);
-  --p2: oklch(0.52 0.12 155);
-  --p3: oklch(0.52 0.17 330);
-  --p4: oklch(0.56 0.12 95);
-  --p5: oklch(0.5 0.15 290);
+  --surface: var(--panel);
+  --sunken: var(--bg);
+  --hover: var(--panel-2);
+  --line-strong: var(--line-2);
+  --field-line: #677382;
+  --ink: #e8ecf1;
+  --ink-2: var(--muted);
+  --ink-3: #8b95a2;
+  --on-ink: #0d0f13;
+  --danger: #ff8f85;
+  --focus: #e8ecf1;
+  --backdrop: rgb(0 0 0 / 0.6);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.45);
+  --shadow-slide: 0 1px 2px rgb(0 0 0 / 0.5), 0 14px 36px -10px rgb(0 0 0 / 0.75);
+  --shadow-pop: 0 2px 6px rgb(0 0 0 / 0.45), 0 24px 56px -16px rgb(0 0 0 / 0.8);
+
+  --p0: #f5a623;
+  --p1: #5aa9e6;
+  --p2: #4cc463;
+  --p3: oklch(0.76 0.14 330);
+  --p4: oklch(0.78 0.1 195);
+  --p5: oklch(0.74 0.13 290);
 
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --bar-h: 56px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: oklch(0.175 0.007 260);
-    --surface: oklch(0.212 0.008 260);
-    --sunken: oklch(0.152 0.007 260);
-    --line: oklch(0.3 0.01 260);
-    --line-strong: oklch(0.38 0.012 260);
-    --field-line: oklch(0.53 0.012 260);
-    --ink: oklch(0.95 0.004 255);
-    --ink-2: oklch(0.8 0.008 255);
-    --ink-3: oklch(0.7 0.01 255);
-    --on-ink: oklch(0.18 0.008 260);
-    --danger: oklch(0.74 0.14 25);
-    --focus: oklch(0.95 0.004 255);
-    --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.4);
-    --shadow-slide: 0 1px 2px oklch(0 0 0 / 0.45), 0 14px 36px -10px oklch(0 0 0 / 0.7);
-    --shadow-pop: 0 2px 6px oklch(0 0 0 / 0.4), 0 24px 56px -16px oklch(0 0 0 / 0.75);
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: oklch(0.972 0.004 255);
+  --panel: oklch(0.995 0.002 255);
+  --panel-2: oklch(0.948 0.005 255);
+  --line: oklch(0.885 0.006 255);
+  --line-2: oklch(0.8 0.008 255);
+  --muted: oklch(0.43 0.013 260);
 
-    --p0: oklch(0.76 0.12 250);
-    --p1: oklch(0.79 0.13 60);
-    --p2: oklch(0.77 0.12 155);
-    --p3: oklch(0.76 0.14 330);
-    --p4: oklch(0.82 0.12 95);
-    --p5: oklch(0.74 0.13 290);
-  }
+  --sunken: var(--panel-2);
+  --hover: var(--panel-2);
+  --field-line: oklch(0.6 0.01 255);
+  --ink: oklch(0.23 0.015 260);
+  --ink-3: oklch(0.5 0.012 260);
+  --on-ink: oklch(0.985 0.003 255);
+  --danger: oklch(0.5 0.17 25);
+  --focus: oklch(0.23 0.015 260);
+  --backdrop: oklch(0.2 0.02 260 / 0.38);
+  --shadow-sm: 0 1px 2px oklch(0.2 0.02 260 / 0.1);
+  --shadow-slide: 0 1px 2px oklch(0.2 0.02 260 / 0.1), 0 12px 32px -8px oklch(0.2 0.02 260 / 0.22);
+  --shadow-pop: 0 2px 6px oklch(0.2 0.02 260 / 0.08), 0 24px 56px -16px oklch(0.2 0.02 260 / 0.35);
+
+  --p0: oklch(0.62 0.15 65);
+  --p1: oklch(0.53 0.14 245);
+  --p2: oklch(0.54 0.14 150);
+  --p3: oklch(0.52 0.17 330);
+  --p4: oklch(0.53 0.1 200);
+  --p5: oklch(0.5 0.15 290);
 }
 
 /* Base */
@@ -112,7 +124,7 @@ code { font-family: var(--mono); font-size: 0.875em; }
   cursor: pointer;
   transition: background-color 0.15s var(--ease), border-color 0.15s var(--ease), transform 0.1s;
 }
-.btn:hover { background: var(--sunken); }
+.btn:hover { background: var(--hover); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .btn:disabled:hover { background: var(--surface); }
@@ -120,9 +132,16 @@ code { font-family: var(--mono); font-size: 0.875em; }
 .btn.primary:hover { background: color-mix(in oklch, var(--ink) 85%, var(--bg)); }
 .btn.primary:disabled:hover { background: var(--ink); }
 .btn.ghost { border-color: transparent; background: transparent; }
-.btn.ghost:hover { background: var(--sunken); }
+.btn.ghost:hover { background: var(--hover); }
 .btn.small { height: 30px; padding: 0 10px; font-size: 0.8125rem; }
 .btn.icon-only { width: 36px; padding: 0; font-weight: 700; }
+/* Theme toggle: the sun switches to light, the moon back to dark. */
+.theme-toggle { color: var(--ink-2); }
+.theme-toggle:hover { color: var(--ink); }
+.theme-toggle .icon-moon { display: none; }
+:root[data-theme="light"] .theme-toggle .icon-sun { display: none; }
+:root[data-theme="light"] .theme-toggle .icon-moon { display: block; }
+.landing-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: clamp(36px, 8vh, 80px); }
 
 .segmented {
   display: inline-flex; gap: 2px; padding: 2px;
@@ -176,7 +195,7 @@ kbd {
 
 /* Landing */
 .landing-inner { width: 100%; max-width: 1080px; margin: 0 auto; padding: clamp(28px, 7vh, 80px) 28px 40px; }
-.landing .wordmark { font-size: 1rem; margin-bottom: clamp(36px, 8vh, 80px); }
+.landing .wordmark { font-size: 1rem; }
 .landing h1 {
   max-width: 22ch; margin: 0 0 16px;
   font-size: clamp(2rem, 1.3rem + 2.6vw, 3.25rem); line-height: 1.07; letter-spacing: -0.03em; font-weight: 700;
@@ -193,7 +212,7 @@ kbd {
   transition: border-color 0.15s var(--ease), background-color 0.15s var(--ease);
 }
 .drop-button:hover { border-color: var(--ink-3); }
-.dropzone.is-over .drop-button { border-style: solid; border-color: var(--ink); background: var(--sunken); }
+.dropzone.is-over .drop-button { border-style: solid; border-color: var(--ink); background: var(--hover); }
 .drop-button:disabled { cursor: progress; }
 .drop-art { color: var(--ink-3); margin-bottom: 6px; }
 .dropzone.is-over .drop-art { color: var(--ink); }
@@ -245,11 +264,30 @@ kbd {
 .format-help p { max-width: 68ch; }
 .format-help pre { margin: 8px 0 0; padding: 12px 14px; overflow-x: auto; border-radius: 8px; background: var(--sunken); font-family: var(--mono); font-size: 0.8125rem; line-height: 1.6; color: var(--ink); }
 
+/* Presenters: how many, then one row each with a name, a voice and its sample. */
+.presenters-block { display: grid; gap: 12px; padding: 14px 16px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.pb-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; }
+.pb-head h2 { margin: 0; font-size: 0.9375rem; font-weight: 650; letter-spacing: -0.005em; }
+.pb-count { display: flex; align-items: center; gap: 10px; }
+.pb-rows { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.pb-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) minmax(0, 1.15fr) 34px; align-items: center; gap: 4px 10px; }
+.pb-name, .pb-voice { width: 100%; min-width: 0; }
+.pb-name::placeholder { color: var(--ink-3); }
+.pb-play { width: 34px; height: 34px; padding: 0; color: var(--ink-2); }
+.pb-play:hover { color: var(--ink); }
+.pb-play.is-playing, .pb-play.is-playing:hover { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.pb-meta, .pb-problem { grid-column: 2 / -1; margin: 0; font-size: 0.75rem; }
+.pb-meta { color: var(--ink-3); }
+.pb-problem { color: var(--danger); font-weight: 550; }
+.pb-problem.is-note { color: var(--ink-2); font-weight: 400; }
+.pb-note { margin: 0; color: var(--ink-2); font-size: 0.8125rem; }
+/* One presenter: no color, since there is nobody to tell apart. */
+.presenters-block.is-single .pb-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) 34px; }
+.presenters-block.is-single .pb-row > .dot { display: none; }
+.presenters-block.is-single .pb-meta, .presenters-block.is-single .pb-problem { grid-column: 1 / -1; }
+
 .ai-panel { display: grid; gap: 14px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
-.ai-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.ai-names { display: flex; gap: 10px; flex-wrap: wrap; }
-.ai-names label { display: grid; gap: 4px; font-size: 0.75rem; font-weight: 600; color: var(--ink-2); }
-.ai-names .input { width: 170px; }
+.ai-for { margin: 0; color: var(--ink-2); font-size: 0.875rem; }
 .ai-steps { display: grid; gap: 10px; margin: 0; padding-left: 1.3em; font-size: 0.875rem; }
 .ai-steps li { padding-left: 4px; }
 .ai-steps li::marker { color: var(--ink-3); font-weight: 600; }
@@ -372,7 +410,7 @@ kbd {
   border: 0; border-radius: 9px; background: transparent; color: var(--ink); cursor: pointer;
   transition: background-color 0.15s var(--ease), transform 0.1s;
 }
-.tbtn:hover { background: var(--sunken); }
+.tbtn:hover { background: var(--hover); }
 .tbtn:active { transform: scale(0.96); }
 .tbtn.play { width: 48px; height: 48px; margin: 0 4px; border-radius: 12px; background: var(--ink); color: var(--on-ink); }
 .tbtn.play:hover { background: color-mix(in oklch, var(--ink) 85%, var(--bg)); }
@@ -382,7 +420,7 @@ kbd {
   font-size: 0.8125rem; font-weight: 600; cursor: pointer;
   transition: background-color 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease);
 }
-.toggle:hover { background: var(--sunken); }
+.toggle:hover { background: var(--hover); }
 .toggle[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
 .voice-status { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 30px; color: var(--ink-2); font-size: 0.8125rem; }
 .vs-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
@@ -398,7 +436,7 @@ dialog {
   border: 1px solid var(--line); border-radius: 14px;
   background: var(--surface); color: var(--ink); box-shadow: var(--shadow-pop);
 }
-dialog::backdrop { background: oklch(0.2 0.02 260 / 0.38); }
+dialog::backdrop { background: var(--backdrop); }
 dialog h2 { margin: 0 0 6px; font-size: 1.125rem; letter-spacing: -0.01em; }
 dialog p { margin: 0 0 14px; }
 .modal { width: min(560px, calc(100vw - 32px)); }
@@ -480,6 +518,13 @@ dialog p { margin: 0 0 14px; }
   /* The script screen has three actions: the deck name makes room for them. */
   .screen.script .deck-name { display: none; }
   #scriptText { min-height: 240px; max-height: 50vh; }
+  .presenters-block { padding: 12px 12px 14px; }
+  .pb-row { grid-template-columns: 8px minmax(0, 1fr) 34px; }
+  .pb-name { grid-column: 2 / -1; }
+  .pb-voice { grid-column: 2; }
+  .presenters-block.is-single .pb-row { grid-template-columns: minmax(0, 1fr) 34px; }
+  .presenters-block.is-single .pb-name { grid-column: 1 / -1; }
+  .presenters-block.is-single .pb-voice { grid-column: 1; }
   .practice-layout { grid-template-rows: minmax(160px, 30vh) minmax(0, 1fr); }
   .transport { flex-direction: column; flex-wrap: nowrap; gap: 8px; padding: 8px 0 10px; }
   .t-extras {

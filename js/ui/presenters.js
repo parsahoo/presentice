@@ -1,21 +1,16 @@
 // Presenters and voices panel. Optional; never a required step.
 import { $, h, clear } from './dom.js';
 import { VOICES, voiceLabel } from '../voices.js';
+import { playVoice, stopVoice } from './voice-preview.js';
 
 export function initPresenters({ app }) {
   const dialog = $('#presentersDialog');
   const list = $('#presenterList');
-  const preview = new Audio();
-  preview.preload = 'none';
 
-  dialog.addEventListener('close', () => preview.pause());
+  dialog.addEventListener('close', stopVoice);
 
   function playPreview(voiceId) {
-    preview.pause();
-    preview.src = new URL(`../../assets/voices/${voiceId}.mp3`, import.meta.url).href;
-    preview.play().catch((err) => {
-      if (err?.name !== 'AbortError') app.toast('The voice preview could not play.');
-    });
+    playVoice(voiceId, 'dialog', () => app.toast('The voice preview could not play.'));
   }
 
   function render() {

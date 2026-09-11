@@ -1,7 +1,7 @@
 // Practice screen: slide, transcript with word highlight, transport and voice status.
 import { $, $$, h, clear, icon } from './dom.js';
 import { wordTimings } from '../sentences.js';
-import { renderSlide, isCancelled } from '../pdf.js';
+import { renderSlide, isCancelled, releaseCanvas } from '../pdf.js';
 import { RATES } from '../player-state.js';
 
 const ICONS = {
@@ -140,15 +140,16 @@ export function initPractice({ app, player }) {
     fallback.src = app.thumbUrl(slide) || '';
     fallback.hidden = false;
     canvas.classList.remove('is-ready');
+    let off = null;
+    let job = null;
     try {
       const doc = await app.doc();
       if (token !== slideToken) return;
       // One offscreen canvas, so the visible slide never blanks while the next one draws.
-      const off = document.createElement('canvas');
-      const job = renderSlide(doc, slide + 1, off, width);
+      off = document.createElement('canvas');
+      job = renderSlide(doc, slide + 1, off, width);
       renderJob = job;
       await job.promise;
-      if (renderJob === job) renderJob = null;
       if (token !== slideToken) return;
       canvas.width = off.width;
       canvas.height = off.height;
@@ -158,6 +159,12 @@ export function initPractice({ app, player }) {
     } catch (err) {
       if (isCancelled(err) || token !== slideToken) return;
       console.warn('Slide render failed, showing the preview image', err);
+    } finally {
+      if (off) releaseCanvas(off);
+      // Done or failed, this job no longer holds the document.
+      if (job && renderJob === job) renderJob = null;
+      // The latest render is done: the document can close if the slide stays.
+      if (token === slideToken && !renderJob) app.docDone();
     }
   }
 
@@ -339,17 +346,24 @@ export function initPractice({ app, player }) {
       box.classList.add('is-error', 'is-done');
       $('#vsRetry').hidden = false;
     } else if (status.phase === 'loading' || status.phase === 'idle') {
+      // idle: the engine is not in memory (never needed, or unloaded after a quiet spell).
       const pending = status.totalCount - status.readyCount;
-      if (status.totalCount && pending === 0) {
+      if (status.totalCount && pending <= 0) {
         label = 'Voices ready';
+        live = label;
         box.classList.add('is-done');
-      } else if (status.total > 0) {
+      } else if (!status.warm && status.total > 0) {
         label = `Downloading voices: ${Math.round(status.loaded / MB)} of ${Math.round(status.total / MB)} MB`;
         fraction = status.loaded / status.total;
         live = `Downloading voices, ${Math.floor(fraction * 4) * 25} percent`;
-      } else {
-        label = status.phase === 'idle' ? '' : 'Starting the voice engine';
+      } else if (!status.warm && status.phase === 'loading') {
+        label = 'Starting the voice engine';
         live = label;
+      } else if (status.phase === 'loading' || pending > 0) {
+        // The model is already on this device: loading it is part of preparing.
+        label = status.totalCount ? `Preparing voices: ${status.readyCount}/${status.totalCount} sentences` : 'Preparing voices';
+        fraction = status.totalCount ? status.readyCount / status.totalCount : 0;
+        live = 'Preparing voices';
       }
     } else if (status.phase === 'ready') {
       if (status.totalCount && status.readyCount < status.totalCount) {

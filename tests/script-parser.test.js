@@ -102,7 +102,7 @@ test('draftScript turns titles and bullets into sentences and skips footers', ()
 
 test('buildPrompt includes slide text, names and the format', () => {
   const prompt = buildPrompt({ pages: [{ title: 'Hello', lines: ['World'] }], count: 2, names: ['Alex', ''] });
-  assert.match(prompt, /2 presenters: Alex, Presenter B/);
+  assert.match(prompt, /2 presenters: Alex, Presenter 2/);
   assert.match(prompt, /Slide 1: Hello \/ World/);
   assert.match(prompt, /one code block/);
   assert.doesNotMatch(prompt, /[\u2014\u2013\u201c\u201d\u2018\u2019]/);

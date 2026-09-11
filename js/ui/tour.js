@@ -89,5 +89,11 @@ export function initTour({ steps, onClose }) {
       index = 0;
       show();
     },
+    /** End the tour without moving focus (the screen changed under it). */
+    stop() {
+      if (card.hidden) return;
+      returnFocus = null;
+      close();
+    },
   };
 }

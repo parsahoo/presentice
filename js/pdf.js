@@ -1,9 +1,11 @@
 // PDF loading, text extraction and rendering with pdf.js (loaded on first use).
+import { pageText } from './slide-text.js';
 
 const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.4.624/';
 export const MAX_PAGES = 60;
 export const MAX_BYTES = 50 * 1024 * 1024;
 const THUMB_WIDTH = 480;
+const MAX_DPR = 2;
 
 let libPromise = null;
 
@@ -59,77 +61,23 @@ export async function openPdf(bytes) {
   return doc;
 }
 
-function itemSize(item) {
-  const [a, b, c, d] = item.transform;
-  return Math.hypot(c, d) || Math.hypot(a, b) || item.height || 0;
-}
-
-function groupLines(items) {
-  const lines = [];
-  let line = null;
-  let prev = null;
-  for (const item of items) {
-    if (typeof item.str !== 'string') continue;
-    const size = itemSize(item);
-    const x = item.transform[4];
-    const y = item.transform[5];
-    if (item.str.trim() === '') {
-      if (line && item.str) line.text += ' ';
-      if (item.hasEOL) prev = null;
-      continue;
-    }
-    const scale = Math.max(size, prev?.size || 0);
-    const breaks =
-      !prev ||
-      Math.abs(y - prev.y) > scale * 0.5 ||
-      x - prev.end > scale * 1.5 ||
-      x < prev.x - scale;
-    if (breaks) {
-      line = { text: item.str, size };
-      lines.push(line);
-    } else {
-      const gap = x - prev.end;
-      const needsSpace = gap > scale * 0.15 && !/\s$/.test(line.text) && !/^\s/.test(item.str);
-      line.text += (needsSpace ? ' ' : '') + item.str;
-      if (/[\p{L}\p{N}]/u.test(item.str)) line.size = Math.max(line.size, size);
-    }
-    prev = { x, y, size, end: x + (item.width || 0) };
-    if (item.hasEOL) prev = null;
-  }
-  return lines
-    .map((l) => ({ text: l.text.replace(/\s+/g, ' ').replace(/^[•●▪■◦‣·*\-\u2013\u2014]\s*/, '').trim(), size: l.size }))
-    .filter((l) => l.text);
-}
-
-function structure(lines) {
-  if (!lines.length) return { title: '', lines: [] };
-  const max = Math.max(...lines.map((l) => l.size));
-  const titleIndex = lines.findIndex((l) => l.size >= max * 0.92);
-  const title = lines[titleIndex].text;
-  const rest = [];
-  lines.forEach((l, i) => {
-    if (i === titleIndex) return;
-    const last = rest[rest.length - 1];
-    const similar = last && l.size / last.size > 0.85 && l.size / last.size < 1.18;
-    // A big number over its label ("40" then "bikes") reads as one phrase.
-    const numberLabel = last && /^[\d.,%$+]+$/.test(last.text) && /^[a-z]/.test(l.text);
-    if (last && (numberLabel || (similar && /^[a-z]/.test(l.text)))) last.text = `${last.text} ${l.text}`;
-    else rest.push({ ...l });
-  });
-  return { title, lines: rest.map((l) => l.text) };
-}
-
 /** Extract { title, lines } for every page. */
 export async function extractPages(doc, onProgress) {
   const pages = [];
   for (let n = 1; n <= doc.numPages; n += 1) {
     const page = await doc.getPage(n);
     const content = await page.getTextContent();
-    pages.push(structure(groupLines(content.items)));
+    pages.push(pageText(content.items));
     page.cleanup();
     onProgress?.(n, doc.numPages);
   }
   return pages;
+}
+
+/** Give a canvas's pixel buffer back now instead of at the next garbage collection. */
+export function releaseCanvas(canvas) {
+  canvas.width = 0;
+  canvas.height = 0;
 }
 
 async function renderPage(doc, n, canvas, width, control = {}) {
@@ -164,12 +112,16 @@ function toBlob(canvas) {
 export async function renderThumbs(doc, onProgress) {
   const thumbs = [];
   let aspect = 16 / 9;
-  for (let n = 1; n <= doc.numPages; n += 1) {
-    const canvas = document.createElement('canvas');
-    const size = await renderPage(doc, n, canvas, THUMB_WIDTH);
-    if (n === 1) aspect = size.width / size.height;
-    thumbs.push(await toBlob(canvas));
-    onProgress?.(n, doc.numPages);
+  const canvas = document.createElement('canvas');
+  try {
+    for (let n = 1; n <= doc.numPages; n += 1) {
+      const size = await renderPage(doc, n, canvas, THUMB_WIDTH);
+      if (n === 1) aspect = size.width / size.height;
+      thumbs.push(await toBlob(canvas));
+      onProgress?.(n, doc.numPages);
+    }
+  } finally {
+    releaseCanvas(canvas);
   }
   return { thumbs, aspect };
 }
@@ -187,10 +139,11 @@ export function isCancelled(err) {
 
 /**
  * Render page n at a CSS width into `canvas`, sharp on high-density screens.
+ * Density is capped at 2: sharper is invisible on a slide and costs memory.
  * Returns { promise, cancel }: cancel() stops the pdf.js work in progress.
  */
 export function renderSlide(doc, n, canvas, cssWidth) {
-  const dpr = Math.min(3, window.devicePixelRatio || 1);
+  const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
   const control = { cancelled: false, task: null };
   const promise = renderPage(doc, n, canvas, Math.max(320, Math.round(cssWidth * dpr)), control);
   return {

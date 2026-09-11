@@ -1,12 +1,33 @@
-// Script step: one textarea, the AI chat helper and a live read-only preview.
+// Script step: presenters, one textarea, the AI chat helper and a live read-only preview.
 import { $, h, clear } from './dom.js';
-import { buildPrompt, draftScript, DEFAULT_PRESENTER } from '../script-parser.js';
+import { buildPrompt, draftScript, labeledNames } from '../script-parser.js';
+import { stripPua } from '../slide-text.js';
+import {
+  MAX_PRESENTERS,
+  placeholderName,
+  assignRoundRobin,
+  renameSpeaker,
+  cleanName,
+  nameProblem,
+  keepHidden,
+  planCount,
+  countBlockedNote,
+} from '../roster.js';
+import { initPresenterRows } from './presenter-rows.js';
 
 const MAX_TEXT_FILE = 2 * 1024 * 1024;
+const MAX_UNDO = 20;
 const NO_TEXT_HINT = 'No selectable text found. Paste or write a script.';
 const EMPTY_HINT = 'Your script is empty. Paste one, or use Draft from my slides.';
 const DRAFT_SUB = 'A draft made from your slides. It is ready to play, or edit it and the preview updates as you type.';
 const EDIT_SUB = 'Edit anything. The preview updates as you type.';
+
+const sameList = (a = [], b = []) => a.length === b.length && a.every((x, i) => x === b[i]);
+const sameVoices = (a = {}, b = {}) => {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => a[k] === b[k]);
+};
+const isUndoKey = (e) => (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z';
 
 export function initScript({ app }) {
   const textarea = $('#scriptText');
@@ -14,15 +35,17 @@ export function initScript({ app }) {
   const draftButton = $('#draftScript');
   const aiPanel = $('#aiPanel');
   const aiToggle = $('#aiToggle');
-  const countGroup = $('#aiCount');
-  const namesHost = $('#aiNames');
   const pasteStatus = $('#pasteStatus');
-  let count = 1;
-  let names = [];
+  let current = null; // app.derive() of the text in the textarea
+  let loadedFor = null; // the project the textarea holds; nothing is written into another one
   let parseTimer = 0;
   let saveTimer = 0;
   let draftPages = null;
   let draftText = '';
+  // Edits made by the presenters section, newest last, so Ctrl+Z or Cmd+Z can take them back.
+  let undo = [];
+
+  const isStale = () => !loadedFor || app.project() !== loadedFor;
 
   /** The draft made from this project's slides, computed once per project. */
   function slideDraft(project) {
@@ -33,46 +56,158 @@ export function initScript({ app }) {
     return draftText;
   }
 
-  // Presenter count buttons
-  const countButtons = [1, 2, 3].map((n) =>
-    h('button', { type: 'button', class: 'seg', 'aria-pressed': 'false', onclick: () => setCount(n) }, String(n)),
-  );
-  countGroup.append(...countButtons);
-
-  function renderNames() {
-    clear(namesHost);
-    for (let i = 0; i < count; i += 1) {
-      const input = h('input', {
-        class: 'input',
-        type: 'text',
-        maxlength: '30',
-        autocomplete: 'off',
-        placeholder: 'Name (optional)',
-        value: names[i] || '',
-      });
-      input.addEventListener('input', () => {
-        names[i] = input.value.trim();
-        commitNames();
-      });
-      namesHost.append(h('label', {}, `Presenter ${i + 1}`, input));
-    }
+  /** The derived script, with the section and the preview showing it. */
+  function fresh() {
+    renderPreview();
+    return current;
   }
 
-  function commitNames() {
-    const used = names.slice(0, count).map((n) => (n || '').trim());
-    app.setNames(used.filter(Boolean).length ? used : []);
-    schedulePreview();
+  /** Save voices over the saved ones: a presenter hidden for now (1 picked) keeps its voice. */
+  function setVoices(voices, drop = null) {
+    const next = { ...app.project().voices, ...voices };
+    if (drop) delete next[drop];
+    if (!sameVoices(next, app.project().voices)) app.setVoices(next);
   }
+
+  /** The presenters and the text as they are now, to take a change back. */
+  function snapshot() {
+    const { count = null, names = [], voices = {} } = app.project();
+    return { text: textarea.value, count, names: [...names], voices: { ...voices } };
+  }
+
+  /** Change the text for the presenters section. Keeps the caret, the scroll position and a way back. */
+  function setText(value, before) {
+    const { scrollTop, selectionStart, selectionEnd } = textarea;
+    undo = [...undo.slice(1 - MAX_UNDO), { ...before, after: value }];
+    textarea.value = value;
+    textarea.scrollTop = scrollTop;
+    if (document.activeElement === textarea) textarea.setSelectionRange(Math.min(selectionStart, value.length), Math.min(selectionEnd, value.length));
+    queueSave();
+  }
+
+  // Setting the text by code clears the browser's own undo, so the last changes made here
+  // (a rename, a new count) are taken back by hand, presenters included.
+  textarea.addEventListener('keydown', (e) => {
+    if (!isUndoKey(e)) return;
+    const last = undo[undo.length - 1];
+    if (!last || textarea.value !== last.after) return;
+    e.preventDefault();
+    undo = undo.slice(0, -1);
+    const caret = Math.min(textarea.selectionStart, last.text.length);
+    textarea.value = last.text;
+    textarea.setSelectionRange(caret, caret);
+    app.setCount(last.count);
+    app.setNames(last.names);
+    app.setVoices(last.voices);
+    queueSave();
+    renderPreview();
+  });
 
   function setCount(n) {
-    count = n;
-    countButtons.forEach((b, i) => b.setAttribute('aria-pressed', String(i + 1 === n)));
-    renderNames();
-    commitNames();
+    if (isStale()) return;
+    const before = fresh();
+    const { roster } = before;
+    const text = textarea.value;
+    const snap = snapshot();
+    const plan = planCount({ text, roster, names: app.project().names, count: n });
+    // The script names more presenters than that: nothing is saved, the note says what to do.
+    const trial = app.derive(plan.text, { names: plan.names, count: n });
+    if (trial.roster.count !== n) {
+      presenterRows.showCountNote(countBlockedNote(trial.roster, n));
+      return;
+    }
+    presenterRows.showCountNote('');
+    app.setCount(n);
+    app.setNames(plan.names);
+    if (plan.text !== text) setText(plan.text, snap);
+    const after = fresh();
+    // Each row keeps its voice when its name changes with the count ("You" becomes "Presenter 1").
+    const voices = {};
+    after.roster.rows.forEach((name, i) => {
+      const prev = roster.rows[i];
+      if (prev && prev !== name) voices[name] = before.voices[prev];
+    });
+    setVoices(voices);
+    fresh();
+  }
+
+  /**
+   * Commit a typed name for row `i`. The script changes only here, from the name the row
+   * had to the new one, so a half-typed name never reaches it.
+   * @returns {{ name: string, error?: string, note?: string }} name: the row's name now.
+   */
+  function renameRow(i, raw) {
+    if (isStale()) return { name: '' };
+    const { roster, voices } = current || fresh();
+    const old = roster.rows[i];
+    const placeholder = placeholderName(i, roster.count);
+    const typed = String(raw ?? '').trim().replace(/\s+/g, ' ');
+    const cleaned = cleanName(raw);
+    const keep = (error) => ({ name: old, error: `${error} The name stays ${old}.` });
+    if (typed && !cleaned) return keep('A name has to start with a letter.');
+    const name = cleaned || placeholder;
+    // Say so when the name was changed on the way in ("Mary Ann Smith" is saved as "Mary Ann").
+    const note = cleaned && typed.toLowerCase() !== cleaned.toLowerCase()
+      ? `Saved as ${cleaned}. A name is one or two words and starts with a letter.`
+      : '';
+    if (name === old) return { name, note };
+    if (name !== placeholder) {
+      const problem = nameProblem(name, i, roster.rows, textarea.value);
+      if (problem) return keep(problem);
+    }
+    const snap = snapshot();
+    const text = textarea.value;
+    const next = renameSpeaker(text, old, name);
+    const lower = name.toLowerCase();
+    const names = keepHidden(roster.rows.map((r, j) => (j === i ? name : r)), app.project().names)
+      // A presenter hidden by a smaller count gives the name up, so two rows never share it.
+      .map((n, j) => (j >= roster.rows.length && String(n || '').toLowerCase() === lower ? '' : n));
+    app.setNames(names);
+    // The voice belongs to the row, not to the old name.
+    setVoices({ [name]: voices[old] }, old);
+    if (next !== text) setText(next, snap);
+    fresh();
+    return { name, note };
+  }
+
+  const presenterRows = initPresenterRows({
+    onCount: setCount,
+    onRename: renameRow,
+    onVoice: (i, voiceId) => {
+      if (isStale()) return;
+      const { roster, voices } = current || fresh();
+      // Every row's voice is saved, so the defaults shown are the ones kept.
+      setVoices({ ...voices, [roster.rows[i]]: voiceId });
+      fresh();
+    },
+    onPreviewError: () => app.toast('The voice sample could not play.'),
+  });
+
+  /**
+   * A whole new text (paste, file, draft). A script with names follows its names;
+   * one without keeps the presenters picked above, sharing the slides in turn.
+   * fromDraft: our own draft from the slides, which never has names.
+   */
+  function settleWholeText(value, { fromDraft = false } = {}) {
+    const project = app.project();
+    const { roster } = app.derive(value);
+    if (roster.speakers.length) {
+      if (project.count != null) app.setCount(null);
+      return value;
+    }
+    // Lines that carry names used only once ("Ana: Hello." then "Ben: Next part."): those are the presenters.
+    const found = fromDraft ? [] : labeledNames(value);
+    if (found.length) {
+      app.setNames(found.slice(0, MAX_PRESENTERS));
+      if (project.count != null) app.setCount(null);
+      return value;
+    }
+    return roster.count > 1 ? assignRoundRobin(value, roster.rows) : value;
   }
 
   /** Replace the whole text in a way the browser can undo (Ctrl+Z or Cmd+Z). */
-  function replaceText(value) {
+  function replaceText(text, options) {
+    const value = settleWholeText(text, options);
     textarea.focus();
     textarea.select();
     let done = false;
@@ -91,12 +226,18 @@ export function initScript({ app }) {
     const open = aiPanel.hidden;
     aiPanel.hidden = !open;
     aiToggle.setAttribute('aria-expanded', String(open));
-    if (open) countButtons[count - 1].focus();
+    if (open) {
+      renderAiFor();
+      $('#copyPrompt').focus();
+    }
   });
 
   $('#copyPrompt').addEventListener('click', () => {
     const project = app.project();
-    const prompt = buildPrompt({ pages: project.pages, count, names: names.slice(0, count) });
+    const { roster } = current || fresh();
+    // A lone presenter with no name gets no name in the prompt.
+    const names = roster.rows.map((r) => (roster.count === 1 && r === placeholderName(0, 1) ? '' : r));
+    const prompt = buildPrompt({ pages: project.pages, count: roster.count, names });
     const status = $('#copyStatus');
     const fallback = () => {
       const box = $('#promptFallback');
@@ -148,7 +289,19 @@ export function initScript({ app }) {
       const ok = window.confirm('Replace your script with a new draft made from your slides? Ctrl+Z or Cmd+Z undoes it.');
       if (!ok) return;
     }
-    replaceText(draft);
+    replaceText(draft, { fromDraft: true });
+  });
+
+  // Ctrl+V or Cmd+V over the whole script (or into an empty one) is a whole new text, like Paste here.
+  // A paste into part of the script is an ordinary edit.
+  textarea.addEventListener('paste', (e) => {
+    const pasted = e.clipboardData?.getData('text/plain') ?? '';
+    if (!pasted.trim()) return;
+    const { value, selectionStart, selectionEnd } = textarea;
+    if ((value.slice(0, selectionStart) + value.slice(selectionEnd)).trim()) return;
+    e.preventDefault();
+    pasteStatus.textContent = '';
+    replaceText(pasted);
   });
 
   // Text file upload
@@ -169,9 +322,19 @@ export function initScript({ app }) {
     }
   });
 
-  function onInput() {
+  /** Save the text now, but only into the project it was loaded for. */
+  function saveNow() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => app.setScript(textarea.value), 300);
+    if (!isStale()) app.setScript(textarea.value);
+  }
+
+  function queueSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveNow, 300);
+  }
+
+  function onInput() {
+    queueSave();
     schedulePreview();
   }
   textarea.addEventListener('input', onInput);
@@ -181,9 +344,28 @@ export function initScript({ app }) {
     parseTimer = setTimeout(renderPreview, 180);
   }
 
+  /** One line in the AI helper: the prompt uses the presenters from the section above. */
+  function renderAiFor() {
+    const { roster } = current || fresh();
+    const named = roster.rows.filter((r, i) => r !== placeholderName(i, roster.count));
+    const who = roster.count === 1
+      ? `1 presenter${named.length ? `, ${named[0]}` : ''}`
+      : `${roster.count} presenters: ${roster.rows.join(', ')}`;
+    $('#aiFor').textContent = `The prompt asks for ${who}. Change that in Presenters above.`;
+  }
+
   function renderPreview() {
+    clearTimeout(parseTimer);
+    if (isStale()) return;
     const project = app.project();
     const derived = app.derive(textarea.value);
+    current = derived;
+    // Keep the saved rows in step with the script (a pasted answer brings its own names).
+    // Rows hidden by a smaller count keep their names, so they come back with them.
+    const names = keepHidden(derived.roster.rows, project.names || []);
+    if (!sameList(names, project.names)) app.setNames(names);
+    presenterRows.render(derived);
+    if (!aiPanel.hidden) renderAiFor();
     const { parsed, sentences, presenters, colorIndex } = derived;
     const empty = sentences.length === 0;
     const hint = $('#emptyHint');
@@ -227,31 +409,27 @@ export function initScript({ app }) {
   }
 
   startButton.addEventListener('click', () => {
-    clearTimeout(saveTimer);
-    app.setScript(textarea.value);
+    saveNow();
     app.startPracticing();
   });
 
   return {
     show() {
       const project = app.project();
-      textarea.value = project.script;
+      clearTimeout(saveTimer);
+      loadedFor = project;
+      undo = [];
+      // Symbol-font glyphs from an older draft show as empty boxes: clean them once.
+      const clean = stripPua(project.script);
+      if (clean !== project.script) app.setScript(clean);
+      textarea.value = clean;
       draftButton.hidden = Boolean(project.noText);
       pasteStatus.textContent = '';
-      names = [...(project.names || [])];
-      if (!names.some(Boolean)) {
-        // Start the AI helper from the presenters the script already has.
-        const detected = app.derive(project.script).presenters.filter((p) => p !== DEFAULT_PRESENTER);
-        names = detected.slice(0, 3);
-      }
-      count = Math.max(1, Math.min(3, names.length || 1));
-      countButtons.forEach((b, i) => b.setAttribute('aria-pressed', String(i + 1 === count)));
-      renderNames();
       renderPreview();
     },
+    /** Save the text now. Does nothing once another project is open. */
     flush() {
-      clearTimeout(saveTimer);
-      app.setScript(textarea.value);
+      saveNow();
     },
   };
 }

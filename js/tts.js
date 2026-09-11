@@ -1,15 +1,34 @@
 // TTS client: worker lifecycle, generation queue and the audio cache.
-import * as store from './store.js';
+//
+// Memory rules:
+// - The voice engine (a worker holding the Kokoro model) exists only while a needed
+//   sentence has no clip in IndexedDB or in the sample's pre-rendered audio. It
+//   unloads after IDLE_UNLOAD_MS with nothing to make, and comes back on demand.
+// - Clips live in IndexedDB. Object URLs exist only for a window around the
+//   playback position (see setWindow); the rest are read back when needed.
+import * as realStore from './store.js';
 import { audioKey, sampleKey } from './keys.js';
 
+// Replaceable in unit tests (see setTestDeps).
+let store = realStore;
+let createWorker = () => new Worker(new URL('./tts-worker.js', import.meta.url), { type: 'module' });
+
+/** Tests only: swap the IndexedDB store and the worker factory. */
+export function setTestDeps({ store: testStore, createWorker: testCreateWorker } = {}) {
+  if (testStore) store = testStore;
+  if (testCreateWorker) createWorker = testCreateWorker;
+}
+
 const PRUNE_DELAY_MS = 4000;
+export const IDLE_UNLOAD_MS = 15000;
 
 const listeners = new Set();
 const storageListeners = new Set();
-const memory = new Map(); // cache key -> { url, duration }
+const memory = new Map(); // cache key -> { url, duration }: only clips near the position
 const loading = new Map(); // cache key -> in-flight IndexedDB read
 const waiters = new Map(); // cache key -> { text, voice, list: [{ resolve, reject, retry }] }
 const failed = new Set(); // keys whose generation failed this session: never retried in the background
+const unsaved = new Set(); // keys in memory not (yet) in IndexedDB: never dropped from memory
 const keyMemo = new Map(); // `${dtype}\n${voice}\n${text}` -> key
 let stored = new Set(); // cache keys present in IndexedDB
 let worker = null;
@@ -19,11 +38,18 @@ let sampleMemo = new Map();
 let queueToken = 0;
 let lastOrder = [];
 let lastKeys = new Set(); // keys of lastOrder, filled by requeue
+let windowItems = [];
+let windowKeys = new Set();
+let windowToken = 0;
+let projectEpoch = 0; // bumped by reset(): late async results from the old project are dropped
+let served = null; // key of the clip get() handed out last: it may be playing
 let pruneTimer = 0;
+let unloadTimer = 0;
 let storageWarned = false;
 
 const status = {
-  phase: 'idle', // idle | loading | ready | error
+  phase: 'idle', // idle (engine off) | loading | ready | error
+  warm: false, // the model loaded on this device before: it comes from the browser cache
   device: null,
   dtype: null,
   loaded: 0,
@@ -53,6 +79,11 @@ export function getStatus() {
   return { ...status };
 }
 
+/** True while the voice engine (and so the model) is in memory. */
+export function isEngineLoaded() {
+  return Boolean(worker);
+}
+
 function guessDtype() {
   return status.dtype || ('gpu' in navigator ? 'fp32' : 'q8');
 }
@@ -61,17 +92,21 @@ function guessDtype() {
 export async function init() {
   const [saved, keys] = await Promise.all([store.get('app:dtype'), store.keys('audio:')]);
   if (saved && !status.dtype) status.dtype = saved;
+  // The dtype is saved when the model first loads, so it also means "the model is cached".
+  status.warm = Boolean(saved);
   stored = new Set(keys.map((k) => k.slice('audio:'.length)));
 }
 
-/** Start loading the model. Safe to call more than once. */
-export function start() {
+/** Start the voice engine. Only called when there is audio to make. */
+function startEngine() {
   if (worker) return;
+  cancelUnload();
   status.phase = 'loading';
   status.error = null;
-  emit();
+  status.loaded = 0;
+  status.total = 0;
   try {
-    worker = new Worker(new URL('./tts-worker.js', import.meta.url), { type: 'module' });
+    worker = createWorker();
   } catch (err) {
     fail(String(err?.message || err));
     return;
@@ -82,13 +117,55 @@ export function start() {
     fail(e.message || 'The voice engine stopped.');
   };
   worker.postMessage({ type: 'init' });
+  emit();
+}
+
+function stopEngine() {
+  if (!worker) return;
+  worker.onmessage = null;
+  worker.onerror = null;
+  worker.terminate();
+  worker = null;
+}
+
+/**
+ * Download the model early for a new presentation, while the user works on the
+ * script. Only when it has never loaded on this device: a cached model starts in
+ * seconds when the first sentence needs it.
+ */
+export function prepare() {
+  if (!status.warm && status.phase !== 'error') startEngine();
+  requeue();
 }
 
 export function retry() {
-  worker?.terminate();
-  worker = null;
+  stopEngine();
   failed.clear();
-  start();
+  status.phase = 'idle';
+  status.error = null;
+  requeue();
+  // A retry with nothing queued still checks that the engine loads.
+  if (!worker) startEngine();
+}
+
+function cancelUnload() {
+  clearTimeout(unloadTimer);
+  unloadTimer = 0;
+}
+
+/** Nothing left to make: free the model after a quiet period. Loading is never cut short. */
+function scheduleUnload() {
+  if (!worker || unloadTimer || status.phase === 'loading') return;
+  unloadTimer = setTimeout(() => {
+    unloadTimer = 0;
+    if (!worker || waiters.size || status.phase === 'loading') return;
+    // Terminating the worker frees the model and its GPU buffers.
+    stopEngine();
+    status.phase = 'idle';
+    status.loaded = 0;
+    status.total = 0;
+    emit();
+  }, IDLE_UNLOAD_MS);
 }
 
 function settle(key, fn) {
@@ -98,6 +175,9 @@ function settle(key, fn) {
 }
 
 function fail(message) {
+  // A broken engine keeps nothing useful: free it. Try again starts a new one.
+  stopEngine();
+  cancelUnload();
   status.phase = 'error';
   status.error = message;
   for (const key of [...waiters.keys()]) settle(key, (w) => w.reject(new Error(message)));
@@ -118,6 +198,7 @@ function handle(data) {
     case 'ready': {
       const changed = status.dtype !== data.dtype;
       status.phase = 'ready';
+      status.warm = true;
       status.device = data.device;
       status.dtype = data.dtype;
       store.set('app:dtype', data.dtype).catch(() => {});
@@ -126,6 +207,7 @@ function handle(data) {
         const pending = [...waiters.values()].flatMap((e) => e.list);
         waiters.clear();
         for (const w of pending) w.retry();
+        setWindow(windowItems);
       }
       emit();
       requeue();
@@ -161,6 +243,19 @@ function remember(key, clip) {
   return clip;
 }
 
+function clipFrom(wav, duration) {
+  return { url: URL.createObjectURL(new Blob([wav], { type: 'audio/wav' })), duration };
+}
+
+/** Drop object URLs outside the window. Clips not yet saved, or maybe playing, stay. */
+function trimMemory() {
+  for (const [key, clip] of memory) {
+    if (windowKeys.has(key) || key === served || unsaved.has(key) || waiters.has(key)) continue;
+    URL.revokeObjectURL(clip.url);
+    memory.delete(key);
+  }
+}
+
 function accept(key, wav, duration) {
   if (!(duration > 0)) {
     failed.add(key);
@@ -168,10 +263,16 @@ function accept(key, wav, duration) {
     requeue();
     return;
   }
-  const clip = remember(key, { url: URL.createObjectURL(new Blob([wav], { type: 'audio/wav' })), duration });
+  const clip = remember(key, clipFrom(wav, duration));
+  unsaved.add(key);
   store.set(`audio:${key}`, { wav, duration }).then(
-    () => stored.add(key),
+    () => {
+      stored.add(key);
+      unsaved.delete(key);
+      trimMemory();
+    },
     (err) => {
+      // Not saved: it stays in memory for this session, since it cannot be read back.
       console.warn('Could not save a voice clip', err);
       warnStorage(err);
     },
@@ -213,17 +314,27 @@ function fromStore(key) {
   if (!stored.has(key)) return Promise.resolve(null);
   // Two callers asking at once share one read and one object URL.
   if (!loading.has(key)) {
+    const epoch = projectEpoch;
     const read = store
       .get(`audio:${key}`)
       .then((rec) => {
+        // The project changed while reading: this clip is not wanted any more.
+        if (epoch !== projectEpoch) return null;
         if (!rec || !(rec.duration > 0)) {
           stored.delete(key);
           return null;
         }
-        return memory.get(key) || remember(key, { url: URL.createObjectURL(new Blob([rec.wav], { type: 'audio/wav' })), duration: rec.duration });
+        return memory.get(key) || remember(key, clipFrom(rec.wav, rec.duration));
       })
-      .catch(() => null)
-      .finally(() => loading.delete(key));
+      .catch((err) => {
+        // Unreadable: treat the sentence as pending, so it is counted and made again.
+        console.warn('Could not read a saved voice clip', err);
+        if (epoch === projectEpoch) stored.delete(key);
+        return null;
+      })
+      .finally(() => {
+        if (loading.get(key) === read) loading.delete(key);
+      });
     loading.set(key, read);
   }
   return loading.get(key);
@@ -241,14 +352,15 @@ export async function get(text, voice, { signal } = {}) {
   const sample = await sampleClip(text, voice);
   if (sample) return sample;
   const key = await keyFor(text, voice);
-  if (memory.has(key)) return memory.get(key);
-  const cached = await fromStore(key);
-  if (cached) return cached;
+  const cached = memory.get(key) || (await fromStore(key));
+  if (cached) {
+    served = key;
+    return cached;
+  }
   if (signal?.aborted) throw abortError();
   if (status.phase === 'error') throw new Error(status.error);
   // An explicit request gives a failed sentence one more try.
   failed.delete(key);
-  start();
   return new Promise((resolve, reject) => {
     const waiter = { resolve, reject };
     const remove = () => {
@@ -265,6 +377,7 @@ export async function get(text, voice, { signal } = {}) {
     signal?.addEventListener('abort', onAbort, { once: true });
     waiter.resolve = (clip) => {
       signal?.removeEventListener('abort', onAbort);
+      served = key;
       resolve(clip);
     };
     waiter.reject = (err) => {
@@ -281,6 +394,24 @@ export async function get(text, voice, { signal } = {}) {
     waiters.set(key, entry);
     requeue();
   });
+}
+
+/**
+ * Keep these sentences ready in memory ([{ text, voice }], most urgent first):
+ * read them from IndexedDB ahead of time, and drop every other object URL.
+ */
+export async function setWindow(items) {
+  windowItems = items;
+  const token = ++windowToken;
+  const keys = [];
+  for (const { text, voice } of items) {
+    if (await sampleClip(text, voice)) continue;
+    keys.push(await keyFor(text, voice));
+  }
+  if (token !== windowToken) return;
+  windowKeys = new Set(keys);
+  trimMemory();
+  for (const key of keys) if (!memory.has(key)) fromStore(key);
 }
 
 /**
@@ -323,8 +454,14 @@ async function requeue() {
   const pending = [...orderKeys].filter((k) => !memory.has(k) && !stored.has(k) && !failed.has(k)).length;
   status.readyCount = ready;
   status.totalCount = ready + pending;
+  if (jobs.length) {
+    cancelUnload();
+    // The engine starts only here: a sentence that is needed has no audio anywhere.
+    if (!worker && status.phase !== 'error') startEngine();
+  }
   emit();
   if (worker && status.phase === 'ready') worker.postMessage({ type: 'queue', jobs });
+  if (!jobs.length) scheduleUnload();
   schedulePrune();
 }
 
@@ -345,6 +482,7 @@ async function prune() {
     if (!keep.has(key)) {
       URL.revokeObjectURL(clip.url);
       memory.delete(key);
+      unsaved.delete(key);
       dropped.push(key);
     }
   }
@@ -362,7 +500,7 @@ async function prune() {
 }
 
 /**
- * Forget the current project. The model stays loaded.
+ * Forget the current project. A loaded engine stays until it has been idle a while.
  * `keepStored`: the saved clips still belong to this project (a reload), so keep using them.
  */
 export function reset({ keepStored = false } = {}) {
@@ -372,15 +510,24 @@ export function reset({ keepStored = false } = {}) {
   loading.clear();
   keyMemo.clear();
   failed.clear();
+  unsaved.clear();
   if (!keepStored) stored = new Set();
   for (const key of [...waiters.keys()]) settle(key, (w) => w.reject(abortError()));
   lastOrder = [];
   lastKeys = new Set();
+  windowItems = [];
+  windowKeys = new Set();
+  windowToken += 1;
+  // A requeue still hashing keys for the old project must not post its jobs or start the engine.
+  queueToken += 1;
+  projectEpoch += 1;
+  served = null;
   manifest = null;
   sampleMemo = new Map();
   status.readyCount = 0;
   status.totalCount = 0;
   worker?.postMessage({ type: 'queue', jobs: [] });
   worker?.postMessage({ type: 'forget' });
+  scheduleUnload();
   emit();
 }

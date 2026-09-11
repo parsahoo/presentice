@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { reduce, initialState, generationOrder } from '../js/player-state.js';
+import { reduce, initialState, generationOrder, audioWindow } from '../js/player-state.js';
 
 // Slide 0: A A B   Slide 1: B B   Slide 2: A B A
 const speakers = [['A', 0], ['A', 0], ['B', 0], ['B', 1], ['B', 1], ['A', 2], ['B', 2], ['A', 2]];
@@ -134,4 +134,23 @@ test('generation order starts at the cursor and prefers playable sentences', () 
   const order = generationOrder(s, ctx);
   assert.deepEqual(order.slice(0, 4), [1, 5, 7, 0]);
   assert.equal(order.length, 8);
+});
+
+test('audioWindow: current first, then the next few, the previous one, then this slide and the next', () => {
+  const s = initialState({ cursor: 1 });
+  assert.deepEqual(audioWindow(s, ctx, 2), [1, 2, 3, 0, 4]);
+  // Slide 0 and slide 1 are all in it; slide 2 only as far as the look-ahead reaches.
+  assert.deepEqual(audioWindow(s, ctx).sort((a, b) => a - b), [0, 1, 2, 3, 4, 5]);
+});
+
+test('audioWindow with only my lines keeps the current sentence and skips the other presenter', () => {
+  const s = initialState({ cursor: 2, focus: 'A' });
+  const w = audioWindow(s, ctx);
+  assert.equal(w[0], 2);
+  assert.ok(!w.includes(3) && !w.includes(4) && !w.includes(6));
+  assert.deepEqual(w.slice(1, 4), [5, 7, 1]);
+});
+
+test('audioWindow is empty without sentences', () => {
+  assert.deepEqual(audioWindow(initialState(), { sentences: [], slideCount: 1 }), []);
 });

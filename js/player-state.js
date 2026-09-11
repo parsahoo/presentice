@@ -156,6 +156,34 @@ function advanceAfterSentence(state, ctx) {
   return transition(state, { cursor: i, slide: slideOf(ctx, i, state.slide), status: 'waiting' });
 }
 
+/**
+ * Sentences whose audio should be ready in memory, in priority order: the current
+ * one, the next few playable ones, the previous one, then the rest of the current
+ * and the next slide. Everything else is read back from storage when needed.
+ */
+export function audioWindow(state, ctx, ahead = 4) {
+  const n = ctx.sentences.length;
+  if (!n) return [];
+  const out = new Set();
+  const add = (i) => {
+    if (i >= 0 && i < n) out.add(i);
+  };
+  add(state.cursor);
+  let i = state.cursor;
+  for (let k = 0; k < ahead; k += 1) {
+    i = nextPlayable(state, ctx, i);
+    if (i < 0) break;
+    add(i);
+  }
+  add(prevPlayable(state, ctx, state.cursor));
+  const slide = ctx.sentences[state.cursor]?.slide ?? state.slide;
+  for (let j = 0; j < n; j += 1) {
+    const s = ctx.sentences[j].slide;
+    if ((s === slide || s === slide + 1) && isPlayable(state, ctx, j)) add(j);
+  }
+  return [...out];
+}
+
 /** Generation order: current, next playable, rest of slide, forward, wrap, then others. */
 export function generationOrder(state, ctx) {
   const n = ctx.sentences.length;

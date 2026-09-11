@@ -3,6 +3,7 @@ import * as store from './store.js';
 import { checkFile, openPdf, extractPages, renderThumbs } from './pdf.js';
 import { parseScript, flattenSentences, draftScript } from './script-parser.js';
 import { defaultVoices } from './voices.js';
+import { resolveRoster, applyRoster, migrateNames } from './roster.js';
 
 export const SAMPLE = {
   pdf: new URL('../sample/brightside.pdf', import.meta.url).href,
@@ -39,6 +40,7 @@ async function build(bytes, name, onProgress) {
       script: draftScript(pages),
       noText: !pages.some((p) => p.title || p.lines.length),
       names: [],
+      count: null,
       voices: {},
       position: {},
       stage: 'script',
@@ -70,8 +72,8 @@ export async function importSample(onProgress) {
 }
 
 export function metaOf(project) {
-  const { name, isSample, pageCount, aspect, noText, stage } = project;
-  return { name, isSample, pageCount, aspect, noText, stage };
+  const { name, isSample, pageCount, aspect, noText, stage, count = null } = project;
+  return { name, isSample, pageCount, aspect, noText, stage, count };
 }
 
 /** Replace whatever is stored with this project, in one transaction. */
@@ -97,6 +99,8 @@ export async function load() {
   const values = await Promise.all(FIELDS.map((f) => store.get(`project:${f}`)));
   const [meta, pdf, pages, thumbs, script, names, voices, position] = values;
   if (!meta || !pdf || !pages) return null;
+  const savedNames = migrateNames(meta, script ?? '', names || []);
+  if (savedNames !== (names || [])) saveField('names', savedNames).catch(() => {});
   return {
     bytes: pdf,
     project: {
@@ -104,7 +108,7 @@ export async function load() {
       pages,
       thumbs: thumbs || [],
       script: script ?? '',
-      names: names || [],
+      names: savedNames,
       voices: voices || {},
       position: position || {},
     },
@@ -113,11 +117,18 @@ export async function load() {
 
 /** Everything the screens need from the script text. */
 export function derive(project, script = project.script) {
-  const parsed = parseScript(script, { slideCount: project.pageCount, names: project.names });
+  const names = project.names || [];
+  const raw = parseScript(script, { slideCount: project.pageCount, names });
+  const roster = resolveRoster({ speakers: raw.speakers, names, count: project.count ?? null });
+  const parsed = applyRoster(raw, roster);
   const sentences = flattenSentences(parsed);
-  const presenters = parsed.presenters.filter((p) => sentences.some((s) => s.speaker === p));
-  if (!presenters.length) presenters.push(parsed.presenters[0]);
-  const voices = defaultVoices(presenters, project.voices);
-  const colorIndex = Object.fromEntries(presenters.map((p, i) => [p, i % 6]));
-  return { parsed, sentences, presenters, voices, colorIndex };
+  const lineCounts = new Map();
+  for (const s of sentences) lineCounts.set(s.speaker, (lineCounts.get(s.speaker) || 0) + 1);
+  // Rows first, so each row keeps its color and gets its own default voice.
+  const everyone = [...new Set([...roster.rows, ...parsed.presenters])];
+  const presenters = everyone.filter((p) => lineCounts.has(p));
+  if (!presenters.length) presenters.push(roster.rows[0]);
+  const voices = defaultVoices(everyone, project.voices);
+  const colorIndex = Object.fromEntries(everyone.map((p, i) => [p, i % 6]));
+  return { parsed, sentences, presenters, voices, colorIndex, roster, lineCounts };
 }

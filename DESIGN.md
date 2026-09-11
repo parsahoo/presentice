@@ -4,9 +4,11 @@ A quiet rehearsal booth. The slide is the stage, the script reads like a telepro
 
 ## Color
 
-Restrained. Cool graphite neutrals in OKLCH (`css/app.css` tokens `--bg`, `--surface`, `--sunken`, `--line`, `--ink`, `--ink-2`, `--ink-3`). Light and dark follow `prefers-color-scheme`.
+Restrained. Cool graphite neutrals (`css/app.css` tokens `--bg`, `--panel`, `--panel-2`, `--line`, `--line-2`, `--ink`, `--muted`, mapped to the working tokens `--surface`, `--sunken`, `--hover`, `--line-strong`, `--ink-2`, `--ink-3`).
 
-Presenter colors are the only hues in the interface (`--p0` to `--p5`, applied through `.pc-N` classes that set `--pc`). They mark who speaks: a dot, a chip tint, the tint behind the current sentence, the word highlight and the shadow-gap bar. Speaker names stay in ink, never in the presenter color, so text contrast never depends on hue.
+Dark is the default, whatever the system setting: `--bg #0d0f13`, `--panel #12151b`, `--panel-2 #171b22`, `--line #232a33`, `--line-2 #3a4552`, `--ink #e8ecf1`, `--muted #9aa4b1`. A light theme sits behind the sun and moon button in every header; the choice is kept in `localStorage` as `presentice:theme`. `js/theme.js` runs in the head so the page never flashes the wrong theme. Text keeps AA contrast in both themes.
+
+Presenter colors are the only hues in the interface (`--p0` amber `#f5a623`, `--p1` blue `#5aa9e6`, `--p2` green `#4cc463`, then `--p3` to `--p5`, applied through `.pc-N` classes that set `--pc`). They mark who speaks: a dot, a chip tint, the tint behind the current sentence, the word highlight and the shadow-gap bar. Speaker names stay in ink, never in the presenter color, so text contrast never depends on hue.
 
 Primary actions and pressed toggles are filled with ink, not with a brand color.
 

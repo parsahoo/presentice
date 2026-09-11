@@ -10,6 +10,7 @@ import { initScript } from './ui/script.js';
 import { initPractice } from './ui/practice.js';
 import { initPresenters } from './ui/presenters.js';
 import { initTour } from './ui/tour.js';
+import { stopVoice } from './ui/voice-preview.js';
 
 const SCREENS = ['landing', 'script', 'practice'];
 const TITLES = { landing: 'Presentice', script: 'Your script: Presentice', practice: 'Practice: Presentice' };
@@ -17,6 +18,8 @@ const TITLES = { landing: 'Presentice', script: 'Your script: Presentice', pract
 let project = null;
 let bytes = null;
 let docPromise = null;
+let docTimer = 0;
+const DOC_IDLE_MS = 15000;
 let derived = null;
 let version = 0;
 let thumbUrls = [];
@@ -63,17 +66,43 @@ function persist(next, nextBytes) {
   });
 }
 
+/** The open pdf.js document, opened again on demand after it was released. */
+function openDoc() {
+  clearTimeout(docTimer);
+  if (!docPromise) {
+    const opening = openPdf(bytes);
+    docPromise = opening;
+    // A failed open must not stay failed: the next render tries again.
+    opening.catch(() => {
+      if (docPromise === opening) docPromise = null;
+    });
+  }
+  return docPromise;
+}
+
+/**
+ * pdf.js keeps the parsed document and its own worker in memory. Close them once
+ * the slide has not changed for a while; the next slide opens the document again.
+ */
+function releaseDocSoon() {
+  clearTimeout(docTimer);
+  docTimer = setTimeout(() => {
+    const current = docPromise;
+    docPromise = null;
+    current?.then((d) => d.destroy()).catch(() => {});
+  }, DOC_IDLE_MS);
+}
+
 // Shared API for the screen modules
 const app = {
   project: () => project,
   info: () => derived,
   version: () => version,
-  derive: (text) => projects.derive(project, text),
+  /** Derive a script text. `over`: project fields to try (names, count) without saving them. */
+  derive: (text, over = {}) => projects.derive({ ...project, ...over }, text),
   thumbUrl: (i) => thumbUrls[i],
-  doc: () => {
-    if (!docPromise) docPromise = openPdf(bytes);
-    return docPromise;
-  },
+  doc: openDoc,
+  docDone: releaseDocSoon,
   toast,
   setScript(text) {
     if (!project || project.script === text) return;
@@ -83,6 +112,16 @@ const app = {
   setNames(names) {
     project.names = names;
     saveField('names', names);
+  },
+  /** The presenter count picked on the Script step, or null to follow the script. */
+  setCount(count) {
+    project.count = count;
+    saveField('meta', projects.metaOf(project));
+  },
+  /** Every presenter's voice at once, from the Script step. Playback picks them up on Start practicing. */
+  setVoices(voices) {
+    project.voices = voices;
+    saveField('voices', voices);
   },
   setVoice(presenter, voice) {
     project.voices = { ...derived.voices, [presenter]: voice };
@@ -159,6 +198,11 @@ function refreshDerived() {
 function show(name) {
   if (!SCREENS.includes(name)) return;
   if (screen === 'script' && name !== 'script') script.flush();
+  if (name !== screen) {
+    stopVoice();
+    // The tour points at Practice controls: it ends when Practice is left.
+    tour.stop();
+  }
   if (name !== 'practice') player.stop();
   screen = name;
   for (const s of SCREENS) $(`#screen-${s}`).hidden = s !== name;
@@ -179,7 +223,9 @@ function show(name) {
 async function enterPractice() {
   refreshDerived();
   practice.show();
-  player.setContext({ sentences: derived.sentences, slideCount: project.pageCount }, project.position);
+  // One presenter: there is no "only my lines" to keep.
+  const position = derived.presenters.length < 2 ? { ...project.position, focus: 'all' } : project.position;
+  player.setContext({ sentences: derived.sentences, slideCount: project.pageCount }, position);
   practice.renderStatus(tts.getStatus());
   $('#practiceTitle').focus({ preventScroll: true });
   const seen = await store.get('app:tourSeen').catch(() => true);
@@ -198,6 +244,9 @@ async function adopt(next, nextBytes, doc, { fresh = true } = {}) {
   docPromise = doc ? Promise.resolve(doc) : null;
   // Each pdf.js document owns a worker: free the previous one.
   oldDoc?.then((d) => d.destroy()).catch(() => {});
+  // The document that made the thumbnails is closed too if no slide needs it soon.
+  if (docPromise) releaseDocSoon();
+  else clearTimeout(docTimer);
   setThumbs(project.thumbs);
   tts.reset({ keepStored: !fresh });
   await tts.useManifest(project.isSample ? projects.SAMPLE.manifest : null).catch((err) => console.warn(err));
@@ -221,7 +270,6 @@ async function openFile(file, zone, errorEl) {
     return;
   }
   busy = true;
-  tts.start();
   zone.setBusy('Opening your slides', 0.02);
   try {
     const { project: next, bytes: nextBytes, doc } = await projects.importFile(file, (phase, n, total) => {
@@ -230,6 +278,8 @@ async function openFile(file, zone, errorEl) {
     });
     persist(next, nextBytes);
     await adopt(next, nextBytes, doc);
+    // A new deck has no audio yet: on a first visit, the model downloads while the script is edited.
+    tts.prepare();
     $('#newDialog').close();
     show('script');
   } catch (err) {
@@ -245,7 +295,7 @@ async function openSample(zone, errorEl) {
   if (busy) return;
   busy = true;
   if (errorEl) errorEl.hidden = true;
-  tts.start();
+  // No engine here: the sample plays its pre-rendered clips. It loads only if a voice or line changes.
   zone?.setBusy('Opening the sample deck', 0.05);
   try {
     const { project: next, bytes: nextBytes, doc } = await projects.importSample((phase, n, total) => {
@@ -274,6 +324,8 @@ $('#newSample').addEventListener('click', () => openSample(newZone, $('#newError
 
 function openNewDialog() {
   player.stop();
+  // Save the Script step now: once another deck opens, its text must not land in that deck.
+  if (screen === 'script') script.flush();
   $('#newError').hidden = true;
   if (!$('#newDialog').open) $('#newDialog').showModal();
 }
@@ -285,10 +337,6 @@ function wouldReplaceOwnWork(current) {
 }
 for (const btn of $$('[data-action="voices"]')) {
   btn.addEventListener('click', () => {
-    if (screen === 'script') {
-      script.flush();
-      refreshDerived();
-    }
     // Voice previews play in the panel: pause the rehearsal so they do not overlap.
     player.stop();
     presenters.open();
@@ -301,7 +349,9 @@ for (const dialog of $$('dialog')) {
   });
 }
 $('#presentersDialog').addEventListener('close', () => {
-  if (screen === 'practice') practice.update(player.getState(), null);
+  // The dialog can close after the project changed or the screen left Practice: nothing to refresh then.
+  if (screen !== 'practice' || !project || !derived) return;
+  practice.update(player.getState(), null);
 });
 $('#editScript').addEventListener('click', () => show('script'));
 $('#helpButton').addEventListener('click', () => app.openHelp());
@@ -343,8 +393,8 @@ async function boot() {
     show('landing');
     return;
   }
+  // The engine starts later, and only if a sentence has no saved audio.
   await adopt(saved.project, saved.bytes, null, { fresh: false });
-  tts.start();
   show(saved.project.stage === 'script' ? 'script' : 'practice');
   if (wantsSample) openNewDialog();
 }

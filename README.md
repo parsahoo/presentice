@@ -65,7 +65,7 @@ Sam: Most teams rehearse by reading silently.
 
 - Start each slide with a `Slide N` line. `Slide N:`, `Slide N - Title` and `---` separators also work.
 - Put a name and a colon in front of a line to give it to a presenter. Lines without a name continue the previous presenter.
-- A prefix only counts as a presenter if it is used at least twice, or if you typed the name in the AI helper. So `Note:` or `Step 1:` used once stays part of the text.
+- A prefix only counts as a presenter if it is used at least twice, or if it is a name in the Presenters section of the Script step. So `Note:` or `Step 1:` used once stays part of the text.
 - Pasted AI answers are cleaned up for you: code fences, markdown, bold names, and the chatter before and after the script are ignored.
 - No slide markers at all? Paragraphs are spread evenly over the slides and the preview tells you so.
 
@@ -90,7 +90,7 @@ node --test tests/*.test.js
 - `js/pdf.js` reads the PDF with [pdf.js](https://mozilla.github.io/pdf.js/) (`pdfjs-dist@5.4.624`): page text for the draft script, thumbnails, and the large slide.
 - `js/script-parser.js` turns a script (or a messy AI answer) into slides, presenters and paragraphs. `js/sentences.js` splits sentences and estimates word timing.
 - `js/tts-worker.js` runs Kokoro through [kokoro-js](https://www.npmjs.com/package/kokoro-js) (`kokoro-js@1.2.1`) in a Web Worker, one sentence at a time, WebGPU first and WebAssembly as the fallback. kokoro-js downloads the model from the main branch of `onnx-community/Kokoro-82M-v1.0-ONNX` on Hugging Face.
-- `js/tts.js` keeps the generation queue in the order you will hear it and caches every clip by a hash of its text, voice and model settings. Editing one sentence regenerates only that sentence. Changing speed regenerates nothing.
+- `js/tts.js` keeps the generation queue in the order you will hear it and caches every clip by a hash of its text, voice and model settings. Editing one sentence regenerates only that sentence. Changing speed regenerates nothing. The voice model loads only when a sentence has no audio yet, and unloads after 15 seconds with nothing to make, so a rehearsal with all its audio ready stays light on memory. Only the clips around your position are kept in memory; the rest are read back from IndexedDB.
 - `js/player-state.js` is a pure, unit tested reducer for playback. `js/player.js` wires it to one audio element.
 - `scripts/render-audio.mjs` pre-renders the sample deck and the voice previews. Maintainers only.
 - `sample/src/slides.html` is the source of the sample deck: print it to PDF to rebuild `sample/brightside.pdf`.
