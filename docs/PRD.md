@@ -1,4 +1,4 @@
-# Deck Rehearsal: PRD v1.1
+# Presentice: PRD v1.1
 
 A free, open-source web app for rehearsing a slide presentation out loud. Drop in your slides (PDF), optionally your script, and practice with a natural voice reading your lines sentence by sentence, with every word highlighted.
 
@@ -91,7 +91,7 @@ Keyboard: Space play/pause, Left/Right previous/next sentence, Up/Down previous/
 - Shown once on the first practice session, 5 short steps (slide, transcript, transport, only my lines, shadow and loop). Runs while the model loads. Skip at any step; reopen from **?**.
 
 ### 4.5 Persistence
-- One project at a time in IndexedDB database `deck-rehearsal` (all keys prefixed): original PDF bytes, page texts, thumbnails (JPEG blobs), script text, voice per presenter, audio cache, last position.
+- One project at a time in IndexedDB database `presentice` (all keys prefixed): original PDF bytes, page texts, thumbnails (JPEG blobs), script text, voice per presenter, audio cache, last position.
 - **New presentation** (confirm dialog) contains the drop zone and **Try the sample deck**, so returning users can still reach the sample.
 - Calls `navigator.storage.persist()`. README notes that Safari may clear site data after 7 days without a visit.
 
@@ -129,7 +129,7 @@ Later: script and UI in other languages, recording the user and comparing, `.doc
 
 ## 8. Technical design
 
-- **Static site**, no build step. `index.html`, `css/app.css`, `js/*.js` as ES modules, `.nojekyll`. Hosted on **GitHub Pages** under `/deck-rehearsal/`: only relative URLs, `new URL(..., import.meta.url)` for the worker, sample and assets.
+- **Static site**, no build step. `index.html`, `css/app.css`, `js/*.js` as ES modules, `.nojekyll`. Hosted on **GitHub Pages** under `/presentice/`: only relative URLs, `new URL(..., import.meta.url)` for the worker, sample and assets.
 - Pinned CDN libraries (jsDelivr): `kokoro-js@1.2.1`, `pdfjs-dist@5.4.624` (modern build). README notes that kokoro-js fetches the model from the Hugging Face main branch.
 - Modules: `pdf.js` (load, render, extract), `script-parser.js`, `sentences.js`, `tts-worker.js`, `tts.js` (worker client, queue, cache), `store.js` (IndexedDB), `player-state.js` (reducer), `player.js` (effects), `ui/*` (landing, script, presenters panel, practice, tour).
 - **pdf.js**: `getDocument({data: buf.slice(0), isEvalSupported: false, wasmUrl, cMapUrl, cMapPacked: true, standardFontDataUrl, iccUrl})`, each URL pointing at the pinned package folders (`wasm/`, `cmaps/`, `standard_fonts/`, `iccs/`). The original buffer is stored (pdf.js empties the one it receives). `GlobalWorkerOptions.workerSrc` = matching `build/pdf.worker.mjs`. Thumbnails render with `intent: 'print'` (avoids requestAnimationFrame stalls in hidden tabs); the large slide renders on demand at devicePixelRatio.
@@ -146,7 +146,7 @@ Later: script and UI in other languages, recording the user and comparing, `.doc
 
 ## 9. Distribution (free)
 
-- Public GitHub repo `deck-rehearsal`, MIT license, GitHub Pages at `https://<user>.github.io/deck-rehearsal/`.
+- Public GitHub repo `presentice`, MIT license, GitHub Pages at `https://<user>.github.io/presentice/`.
 - README (US English, no em or en dashes): one-line pitch, screenshot, **Open the app** link, 3-step quick start, privacy statement, download size, browser support, keyboard shortcuts, script format, run locally (download ZIP, `python3 -m http.server`), license and disclaimer.
 - Repo polish: description, topics, social preview image, `.github/ISSUE_TEMPLATE/bug_report.md`.
 

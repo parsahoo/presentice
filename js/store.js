@@ -1,7 +1,7 @@
 // IndexedDB key-value store. One project at a time; every key is prefixed.
 //   project:*  the current presentation   audio:*  generated clips   app:*  preferences
 
-const DB_NAME = 'deck-rehearsal';
+const DB_NAME = 'presentice';
 const STORE = 'kv';
 const MAX_KEY = '\uffff';
 let dbPromise = null;

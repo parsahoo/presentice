@@ -12,7 +12,7 @@ import { initPresenters } from './ui/presenters.js';
 import { initTour } from './ui/tour.js';
 
 const SCREENS = ['landing', 'script', 'practice'];
-const TITLES = { landing: 'Deck Rehearsal', script: 'Your script: Deck Rehearsal', practice: 'Practice: Deck Rehearsal' };
+const TITLES = { landing: 'Presentice', script: 'Your script: Presentice', practice: 'Practice: Presentice' };
 
 let project = null;
 let bytes = null;

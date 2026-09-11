@@ -1,10 +1,10 @@
-# Deck Rehearsal
+# Presentice
 
 Rehearse a slide presentation out loud. Drop in your slides, and a natural voice reads your script sentence by sentence with every word highlighted, so you can repeat it, shadow it, and get it into your mouth before the real thing.
 
-![Deck Rehearsal practice screen with the Brightside sample deck](docs/screenshot.png)
+![Presentice practice screen with the Brightside sample deck](docs/screenshot.png)
 
-**[Open the app](https://parsahoo.github.io/deck-rehearsal/)** or **[try the sample deck](https://parsahoo.github.io/deck-rehearsal/#sample)**
+**[Open the app](https://parsahoo.github.io/presentice/)** or **[try the sample deck](https://parsahoo.github.io/presentice/#sample)**
 
 ## Quick start
 

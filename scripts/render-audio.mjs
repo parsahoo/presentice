@@ -17,7 +17,7 @@ import { VOICES, defaultVoices } from '../js/voices.js';
 const root = new URL('..', import.meta.url).pathname;
 const { KokoroTTS } = await import(process.env.KOKORO_JS || 'kokoro-js');
 const tts = await KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'fp32', device: 'cpu' });
-const work = join(tmpdir(), `deck-rehearsal-render-${process.pid}`);
+const work = join(tmpdir(), `presentice-render-${process.pid}`);
 mkdirSync(work, { recursive: true });
 
 async function renderMp3(text, voice, outPath) {

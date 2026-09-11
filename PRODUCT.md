@@ -1,6 +1,6 @@
 # Product
 
-Deck Rehearsal is a free, open source web app for rehearsing a slide presentation out loud. It reads the script sentence by sentence in a natural voice with every word highlighted, so a presenter can listen, repeat and shadow.
+Presentice is a free, open source web app for rehearsing a slide presentation out loud. It reads the script sentence by sentence in a natural voice with every word highlighted, so a presenter can listen, repeat and shadow.
 
 - **Who:** one person, or a team of up to three, preparing a talk on a laptop. Often presenting in a second language, or presenting something that matters.
 - **Main job:** hear my part sentence by sentence, repeat it, and get back to the start of a sentence instantly.
