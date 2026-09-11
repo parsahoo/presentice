@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Brightside sample deck</title>
+<style>
+  @page { size: 1280px 720px; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; color: #17332b; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .slide { width: 1280px; height: 720px; position: relative; overflow: hidden; page-break-after: always; break-after: page; background: #fbf7ea; padding: 88px 104px; }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  .brand { position: absolute; left: 104px; bottom: 56px; display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; letter-spacing: 0.01em; color: #17332b; }
+  .sun { width: 22px; height: 22px; border-radius: 50%; background: #f2b62a; box-shadow: 0 0 0 5px #fbe3a2; }
+  .foot { position: absolute; right: 104px; bottom: 56px; font-size: 18px; color: #5b6f67; }
+  h1 { font-size: 64px; line-height: 1.05; margin: 0 0 56px; letter-spacing: -0.02em; font-weight: 800; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { font-size: 38px; line-height: 1.25; margin: 0 0 30px; padding-left: 52px; position: relative; }
+  li::before { content: ""; position: absolute; left: 0; top: 14px; width: 22px; height: 22px; border-radius: 50%; border: 5px solid #1f7a5c; }
+  .band { position: absolute; right: 0; top: 0; bottom: 0; width: 330px; background: #1f7a5c; }
+  .band .wheel { position: absolute; width: 230px; height: 230px; border-radius: 50%; border: 22px solid #f2b62a; left: 50px; }
+  .band .w1 { top: 120px; } .band .w2 { top: 390px; border-color: #fbe3a2; }
+  .cover { background: #1f7a5c; color: #fbf7ea; padding: 120px 104px; }
+  .cover h1 { font-size: 132px; margin: 0 0 24px; letter-spacing: -0.03em; }
+  .cover .sub { font-size: 44px; margin: 0 0 80px; color: #fbe3a2; font-weight: 600; }
+  .cover .meta { font-size: 26px; color: #d7eadf; }
+  .cover .bigsun { position: absolute; right: -120px; top: -120px; width: 520px; height: 520px; border-radius: 50%; background: #f2b62a; }
+  .cover .ring { position: absolute; right: 160px; bottom: -180px; width: 380px; height: 380px; border-radius: 50%; border: 36px solid #fbe3a2; opacity: 0.9; }
+  .cover .foot { color: #d7eadf; left: 104px; right: auto; }
+  .stat { display: flex; gap: 40px; margin-top: 8px; }
+  .stat div { background: #fff; border-radius: 18px; padding: 28px 34px; box-shadow: 0 4px 14px rgba(23, 51, 43, 0.08); }
+  .stat b { display: block; font-size: 64px; line-height: 1; color: #1f7a5c; }
+  .stat span { font-size: 26px; color: #3d544b; }
+  .ask li::before { border-radius: 6px; background: #f2b62a; border-color: #f2b62a; }
+</style>
+</head>
+<body>
+  <section class="slide cover">
+    <div class="bigsun"></div>
+    <div class="ring"></div>
+    <h1>Brightside</h1>
+    <p class="sub">Shared bikes for small towns</p>
+    <p class="meta">Pilot proposal for the town council</p>
+    <div class="foot">Fictional sample deck</div>
+  </section>
+
+  <section class="slide">
+    <div class="band"><div class="wheel w1"></div><div class="wheel w2"></div></div>
+    <h1>The problem</h1>
+    <ul>
+      <li>Most trips are shorter than 3 km</li>
+      <li>Buses run once an hour</li>
+      <li>Short trips still happen by car</li>
+    </ul>
+    <div class="brand"><span class="sun"></span>Brightside</div>
+    <div class="foot" style="right: 394px">Fictional sample deck</div>
+  </section>
+
+  <section class="slide">
+    <div class="band"><div class="wheel w1"></div><div class="wheel w2"></div></div>
+    <h1>How it works</h1>
+    <ul>
+      <li>Scan any bike to unlock it</li>
+      <li>Ride anywhere in town</li>
+      <li>Park at any marked rack</li>
+    </ul>
+    <div class="brand"><span class="sun"></span>Brightside</div>
+    <div class="foot" style="right: 394px">Fictional sample deck</div>
+  </section>
+
+  <section class="slide">
+    <h1>The pilot</h1>
+    <div class="stat">
+      <div><b>40</b><span>bikes</span></div>
+      <div><b>12</b><span>racks</span></div>
+      <div><b>6</b><span>months, spring to fall</span></div>
+    </div>
+    <ul style="margin-top: 56px">
+      <li>Repairs by a local shop</li>
+    </ul>
+    <div class="brand"><span class="sun"></span>Brightside</div>
+    <div class="foot">Fictional sample deck</div>
+  </section>
+
+  <section class="slide ask">
+    <div class="band"><div class="wheel w1"></div><div class="wheel w2"></div></div>
+    <h1>What we ask tonight</h1>
+    <ul>
+      <li>A vote on rack locations</li>
+      <li>Space on three public lots</li>
+      <li>Feedback at the midpoint review</li>
+    </ul>
+    <div class="brand"><span class="sun"></span>Brightside</div>
+    <div class="foot" style="right: 394px">Fictional sample deck</div>
+  </section>
+</body>
+</html>

@@ -1,0 +1,26 @@
+Slide 1
+Alex: Good evening, and thank you for having us.
+Sam: I'm Sam, and this is Alex.
+Alex: We're here to talk about Brightside, a shared bike service built for small towns.
+
+Slide 2
+Sam: Let's start with the problem.
+Sam: Most trips in a small town are shorter than three kilometers, and almost all of them happen by car.
+Alex: The bus comes once an hour, and big city bike share never comes here at all.
+Sam: So people who would happily ride have nothing to ride.
+
+Slide 3
+Alex: Here's how Brightside works.
+Alex: You open the app, scan the code on any bike, and it unlocks in a second.
+Alex: Ride wherever you need to go, then park at any marked rack in town.
+Alex: No docks to build and no cards to buy.
+
+Slide 4
+Sam: We're proposing a six month pilot, from spring to fall.
+Sam: It starts with forty bikes and twelve racks, near the school, the library and the shops on the main street.
+Alex: A local repair shop keeps every bike in good shape, so the money stays in town.
+
+Slide 5
+Alex: Tonight we're asking for three things.
+Sam: A vote on the rack locations, space on three public lots, and your feedback at the midpoint review.
+Alex: Thank you. We'd be glad to take your questions.

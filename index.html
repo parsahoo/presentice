@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self'; font-src 'self' data: https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Deck Rehearsal</title>
+<meta name="description" content="Rehearse a slide presentation out loud. Your script is read sentence by sentence with a natural voice, every word highlighted. Free, open source, and nothing leaves your device.">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<noscript><p class="noscript">Deck Rehearsal needs JavaScript. Turn it on and reload the page.</p></noscript>
+
+<main id="main">
+
+  <!-- Landing -->
+  <section id="screen-landing" class="screen landing" aria-labelledby="landingTitle" hidden>
+    <div class="landing-inner">
+      <p class="wordmark"><svg class="mark" viewBox="0 0 32 32" width="24" height="24" aria-hidden="true"><rect class="mark-screen" x="3" y="6" width="26" height="18" rx="3.5"/><rect class="mark-line" x="7.5" y="11" width="9" height="2.6" rx="1.3"/><rect class="mark-accent" x="7.5" y="16.4" width="17" height="2.6" rx="1.3"/><path class="mark-stand" d="M16 24v3.5M11.5 27.5h9" fill="none" stroke-width="2.2" stroke-linecap="round"/></svg><span>Deck Rehearsal</span></p>
+      <h1 id="landingTitle" tabindex="-1">Rehearse your talk out loud, one sentence at a time.</h1>
+      <p class="lede">Drop in your slides. Hear your script in a natural voice with every word highlighted, repeat any sentence, and say it back.</p>
+      <div class="start-row">
+        <div id="landingDrop" class="drop-host"></div>
+        <button type="button" class="sample-card" id="landingSample">
+          <img src="sample/cover.jpg" alt="" width="640" height="360">
+          <span class="sample-text">
+            <span class="sample-title">Try the sample deck</span>
+            <span class="sample-sub">Brightside: 5 slides, 2 presenters. Plays right away.</span>
+          </span>
+        </button>
+      </div>
+      <p class="error" id="landingError" role="alert" hidden></p>
+      <ul class="facts">
+        <li><strong>Stays on your device.</strong> Your slides, script and audio never leave this browser.</li>
+        <li><strong>Free.</strong> No account, no limits, open source under the MIT license.</li>
+        <li><strong>Voices download once.</strong> About 120 MB. Computers with a strong graphics card get a faster version, about 350 MB.</li>
+      </ul>
+      <p class="fineprint">Works best in Chrome or Edge on a laptop. <a href="https://github.com/parsahoo/deck-rehearsal" target="_blank" rel="noopener noreferrer">Source on GitHub</a></p>
+    </div>
+  </section>
+
+  <!-- Script step -->
+  <section id="screen-script" class="screen script" aria-labelledby="scriptTitle" hidden>
+    <header class="bar">
+      <div class="bar-left">
+        <span class="wordmark small"><svg class="mark" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect class="mark-screen" x="3" y="6" width="26" height="18" rx="3.5"/><rect class="mark-line" x="7.5" y="11" width="9" height="2.6" rx="1.3"/><rect class="mark-accent" x="7.5" y="16.4" width="17" height="2.6" rx="1.3"/><path class="mark-stand" d="M16 24v3.5M11.5 27.5h9" fill="none" stroke-width="2.2" stroke-linecap="round"/></svg><span>Deck Rehearsal</span></span>
+        <span class="deck-name" data-deck-name></span>
+      </div>
+      <div class="bar-right">
+        <button type="button" class="btn ghost" data-action="new"><span class="label-long">New presentation</span><span class="label-short">New</span></button>
+        <button type="button" class="btn" data-action="voices"><span class="label-long">Presenters and voices</span><span class="label-short">Voices</span></button>
+        <button type="button" class="btn primary" id="startPracticing" aria-describedby="emptyHint">Start practicing</button>
+      </div>
+    </header>
+    <div class="script-layout">
+      <div class="editor-col">
+        <div class="editor-head">
+          <h1 id="scriptTitle" tabindex="-1">Your script</h1>
+          <div class="editor-tools">
+            <button type="button" class="btn small" id="draftScript">Draft from my slides</button>
+            <button type="button" class="btn small" id="uploadText">Upload a text file</button>
+            <input type="file" id="textInput" accept=".txt,.md,.markdown,text/plain,text/markdown" class="visually-hidden" tabindex="-1" aria-hidden="true">
+            <button type="button" class="btn small" id="aiToggle" aria-expanded="false" aria-controls="aiPanel">Write it with an AI chat (free)</button>
+          </div>
+        </div>
+        <p class="editor-sub" id="editorSub">Edit anything. The preview updates as you type.</p>
+
+        <div class="ai-panel" id="aiPanel" hidden>
+          <div class="ai-row">
+            <span class="field-label" id="countLabel">How many presenters?</span>
+            <div class="segmented" role="group" aria-labelledby="countLabel" id="aiCount"></div>
+          </div>
+          <div class="ai-names" id="aiNames"></div>
+          <ol class="ai-steps">
+            <li><button type="button" class="btn primary small" id="copyPrompt">Copy prompt</button> <span class="copy-status" id="copyStatus" aria-live="polite"></span></li>
+            <li>Paste it into a chat:
+              <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer">ChatGPT</a>,
+              <a href="https://claude.ai/new" target="_blank" rel="noopener noreferrer">Claude</a> or
+              <a href="https://gemini.google.com/app" target="_blank" rel="noopener noreferrer">Gemini</a>.</li>
+            <li>Copy the whole answer, then <button type="button" class="btn small" id="pasteHere">Paste the answer here</button> <span class="copy-status" id="pasteStatus" aria-live="polite"></span></li>
+          </ol>
+          <div class="prompt-fallback" id="promptFallback" hidden>
+            <label for="promptText">Your browser blocked copying. Press Ctrl+C or Cmd+C to copy the selected prompt.</label>
+            <textarea id="promptText" readonly rows="6"></textarea>
+          </div>
+        </div>
+
+        <p class="hint" id="emptyHint" hidden>No selectable text found. Paste or write a script.</p>
+        <label for="scriptText" class="visually-hidden">Script text</label>
+        <textarea id="scriptText" spellcheck="true" autocomplete="off" placeholder="Paste or type your script. Example:&#10;&#10;Slide 1&#10;Alex: Good morning. Thank you for having us.&#10;Sam: I will start with the problem.&#10;&#10;Slide 2&#10;..."></textarea>
+        <details class="format-help">
+          <summary>Script format</summary>
+          <p>Start each slide with a <code>Slide N</code> line. Put a name and a colon before a line to give it to a presenter. Lines without a name continue the previous presenter.</p>
+          <pre>Slide 1
+Alex: Good morning. Thank you for having us.
+Sam: I will start with the problem.
+
+Slide 2
+Sam: Most teams rehearse by reading silently.</pre>
+        </details>
+      </div>
+      <aside class="preview-col" aria-labelledby="previewTitle">
+        <div class="preview-head">
+          <h2 id="previewTitle">Preview</h2>
+          <p class="preview-summary" id="previewSummary"></p>
+        </div>
+        <ul class="warnings" id="previewWarnings"></ul>
+        <ol class="preview-list" id="previewList"></ol>
+      </aside>
+    </div>
+  </section>
+
+  <!-- Practice -->
+  <section id="screen-practice" class="screen practice" aria-labelledby="practiceTitle" hidden>
+    <header class="bar">
+      <div class="bar-left">
+        <span class="wordmark small"><svg class="mark" viewBox="0 0 32 32" width="20" height="20" aria-hidden="true"><rect class="mark-screen" x="3" y="6" width="26" height="18" rx="3.5"/><rect class="mark-line" x="7.5" y="11" width="9" height="2.6" rx="1.3"/><rect class="mark-accent" x="7.5" y="16.4" width="17" height="2.6" rx="1.3"/><path class="mark-stand" d="M16 24v3.5M11.5 27.5h9" fill="none" stroke-width="2.2" stroke-linecap="round"/></svg><span>Deck Rehearsal</span></span>
+        <h1 class="deck-name" id="practiceTitle" tabindex="-1" data-deck-name></h1>
+      </div>
+      <div class="bar-right">
+        <button type="button" class="btn ghost" id="editScript">Edit script</button>
+        <button type="button" class="btn ghost" data-action="voices"><span class="label-long">Presenters and voices</span><span class="label-short">Voices</span></button>
+        <button type="button" class="btn ghost" data-action="new"><span class="label-long">New presentation</span><span class="label-short">New</span></button>
+        <button type="button" class="btn icon-only" id="helpButton" aria-label="Keyboard shortcuts and tour" title="Keyboard shortcuts and tour (?)">?</button>
+      </div>
+    </header>
+
+    <div class="practice-layout">
+      <div class="stage-col">
+        <div class="stage" id="stage">
+          <img class="stage-fallback" id="stageFallback" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" alt="" hidden>
+          <canvas id="slideCanvas" role="img" aria-label="Slide"></canvas>
+        </div>
+        <nav class="strip" id="strip" aria-label="Slides"></nav>
+      </div>
+      <section class="transcript" id="transcript" aria-labelledby="transcriptTitle">
+        <header class="transcript-head">
+          <h2 id="transcriptTitle">Slide 1</h2>
+          <span class="visually-hidden" id="turnLive" aria-live="polite"></span>
+        </header>
+        <div class="transcript-body" id="transcriptBody"></div>
+        <footer class="transcript-foot">
+          <div class="voice-status" id="voiceStatus">
+            <span class="vs-text" id="vsText" aria-hidden="true"></span>
+            <span class="vs-bar" aria-hidden="true"><span class="vs-fill" id="vsFill"></span></span>
+            <button type="button" class="btn small" id="vsRetry" hidden>Try again</button>
+            <span class="visually-hidden" id="vsLive" aria-live="polite"></span>
+          </div>
+          <p class="note" id="vsAdvice" hidden>Chrome or Edge on a laptop works best.</p>
+          <p class="note" id="slowNote" hidden>This computer makes voices slower than real time, so expect short pauses between sentences. Chrome or Edge on a computer with a strong graphics card is faster.</p>
+        </footer>
+      </section>
+    </div>
+
+    <footer class="transport" id="transport">
+      <div class="t-group t-nav" id="navGroup" role="group" aria-label="Playback">
+        <button type="button" class="tbtn" data-cmd="PREV_SLIDE" aria-label="Previous slide" title="Previous slide (Up)"></button>
+        <button type="button" class="tbtn" data-cmd="PREV" aria-label="Previous sentence" title="Previous sentence (Left)"></button>
+        <button type="button" class="tbtn play" id="playButton" data-cmd="TOGGLE_PLAY" aria-label="Play" title="Play or pause (Space)"></button>
+        <button type="button" class="tbtn" data-cmd="NEXT" aria-label="Next sentence" title="Next sentence (Right)"></button>
+        <button type="button" class="tbtn" data-cmd="NEXT_SLIDE" aria-label="Next slide" title="Next slide (Down)"></button>
+        <button type="button" class="tbtn" data-cmd="REPLAY" aria-label="Replay sentence" title="Replay sentence (R)"></button>
+      </div>
+      <div class="t-extras">
+      <div class="t-group t-modes" id="modesGroup" role="group" aria-label="Practice modes">
+        <button type="button" class="toggle" id="loopButton" data-cmd="TOGGLE_LOOP" aria-pressed="false" title="Repeat this sentence until you turn it off (L)">Loop</button>
+        <button type="button" class="toggle" id="shadowButton" data-cmd="TOGGLE_SHADOW" aria-pressed="false" title="Pause after each sentence so you can say it back (S)">Shadow</button>
+      </div>
+      <div class="t-group t-focus" id="focusWrap">
+        <span class="field-label" id="focusLabel">Only my lines</span>
+        <div class="segmented" role="group" aria-labelledby="focusLabel" id="focusGroup"></div>
+      </div>
+      <div class="t-group t-speed">
+        <span class="field-label" id="speedLabel">Speed</span>
+        <div class="segmented" role="group" aria-labelledby="speedLabel" id="speedGroup"></div>
+      </div>
+      </div>
+    </footer>
+  </section>
+</main>
+
+<dialog id="presentersDialog" class="sheet" aria-labelledby="presentersTitle">
+  <div class="sheet-head">
+    <h2 id="presentersTitle">Presenters and voices</h2>
+    <button type="button" class="btn ghost small" data-close>Close</button>
+  </div>
+  <p class="muted">Names come from the script. To rename someone, edit the script.</p>
+  <ul class="presenter-list" id="presenterList"></ul>
+</dialog>
+
+<dialog id="newDialog" class="modal" aria-labelledby="newTitle">
+  <h2 id="newTitle">New presentation</h2>
+  <p class="muted">This replaces the current presentation and its saved voices on this device.</p>
+  <div id="newDrop" class="drop-host"></div>
+  <p class="error" id="newError" role="alert" hidden></p>
+  <div class="modal-actions">
+    <button type="button" class="btn" id="newSample">Try the sample deck</button>
+    <button type="button" class="btn ghost" data-close>Cancel</button>
+  </div>
+</dialog>
+
+<dialog id="helpDialog" class="modal" aria-labelledby="helpTitle">
+  <h2 id="helpTitle">Keyboard shortcuts</h2>
+  <dl class="keys">
+    <div><dt><kbd>Space</kbd></dt><dd>Play or pause</dd></div>
+    <div><dt><kbd>Left</kbd> <kbd>Right</kbd></dt><dd>Previous or next sentence</dd></div>
+    <div><dt><kbd>Up</kbd> <kbd>Down</kbd></dt><dd>Previous or next slide</dd></div>
+    <div><dt><kbd>R</kbd></dt><dd>Replay the sentence</dd></div>
+    <div><dt><kbd>L</kbd></dt><dd>Loop the sentence</dd></div>
+    <div><dt><kbd>S</kbd></dt><dd>Shadow mode</dd></div>
+    <div><dt><kbd>F</kbd></dt><dd>Cycle only my lines</dd></div>
+    <div><dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Slower or faster</dd></div>
+    <div><dt><kbd>?</kbd></dt><dd>This list</dd></div>
+  </dl>
+  <div class="modal-actions">
+    <button type="button" class="btn" id="startTour">Take the tour</button>
+    <button type="button" class="btn primary" data-close>Close</button>
+  </div>
+</dialog>
+
+<div class="tour" id="tour" role="dialog" aria-modal="false" aria-labelledby="tourTitle" hidden>
+  <p class="tour-count" id="tourCount"></p>
+  <h2 id="tourTitle"></h2>
+  <p id="tourText"></p>
+  <div class="tour-actions">
+    <button type="button" class="btn ghost small" id="tourSkip">Skip tour</button>
+    <button type="button" class="btn primary small" id="tourNext">Next</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

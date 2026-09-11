@@ -1,0 +1,81 @@
+{
+  "model": "onnx-community/Kokoro-82M-v1.0-ONNX",
+  "voices": {
+    "Alex": "am_michael",
+    "Sam": "af_heart"
+  },
+  "items": {
+    "6076807a08bc3af46bb122ffc858feff6d7e66c2a92f82e5a67f8c9aee2e00c0": {
+      "file": "audio/6076807a08bc3af4.mp3",
+      "duration": 2.33
+    },
+    "93eb0ecb3a4d2884787102c2e40bc259fd3105f1b2089d5bf7d946bf3024e258": {
+      "file": "audio/93eb0ecb3a4d2884.mp3",
+      "duration": 1.73
+    },
+    "54886749112719d1f51625304399beee7d9104c665018039ade8c7d5c0219341": {
+      "file": "audio/54886749112719d1.mp3",
+      "duration": 5.045
+    },
+    "a5db181c927d24e31be5414fb992cfba7ac7e8eeff1d5997a2297bc96dfc2a24": {
+      "file": "audio/a5db181c927d24e3.mp3",
+      "duration": 1.5
+    },
+    "d4473b4df8220713ab52a21b2aabc28af845f420f4401a7e2f48268ff11a80d6": {
+      "file": "audio/d4473b4df8220713.mp3",
+      "duration": 5.685
+    },
+    "c12922cea9abc7b0ed10ebf567e6f3c0a63fead0ce6a4a5c453c9abbf9355246": {
+      "file": "audio/c12922cea9abc7b0.mp3",
+      "duration": 4.635
+    },
+    "5041c516929d87fceab70c9a4160d72f177ff5adef1804ed3becc9e40a07fc77": {
+      "file": "audio/5041c516929d87fc.mp3",
+      "duration": 3.135
+    },
+    "f533709e8275e3702bb1679b473f57b353abbe8753c312e329f02936e186d95e": {
+      "file": "audio/f533709e8275e370.mp3",
+      "duration": 1.65
+    },
+    "8b85b18d954ae02f6c48255e639632ca12370047978caaf606740c91dfbb3add": {
+      "file": "audio/8b85b18d954ae02f.mp3",
+      "duration": 4.295
+    },
+    "72641fe7f1e03e1daa0316837ed4677fa5ea1a6274de9d22f300ffa3ba480c5d": {
+      "file": "audio/72641fe7f1e03e1d.mp3",
+      "duration": 4.44
+    },
+    "38eb489c31651fdb1b2365a473439fc6c3a16c9e45a5f6fd45224d9820399f83": {
+      "file": "audio/38eb489c31651fdb.mp3",
+      "duration": 2.75
+    },
+    "d6f19df3497ef94c152e4ec8d079560ee210fdafa0b512537712de301be8c2ac": {
+      "file": "audio/d6f19df3497ef94c.mp3",
+      "duration": 3.06
+    },
+    "53835b50d4f0837fb075c5dd3fb50bc06526798d2260d8335f0f046c44292d33": {
+      "file": "audio/53835b50d4f0837f.mp3",
+      "duration": 5.795
+    },
+    "c975a194d74ad58933ee25410c47ad23ec44b51e90dd28323868b650354f4779": {
+      "file": "audio/c975a194d74ad589.mp3",
+      "duration": 5.155
+    },
+    "3cf61ea865c99dd3b1c5df3e5b8612b7d19258b3b9cf6b6410ee59ee963860a1": {
+      "file": "audio/3cf61ea865c99dd3.mp3",
+      "duration": 2.12
+    },
+    "8e7a1ffc256e3c1b9fccde41d9f20d6534a7bffba80ac6adcd13e754d155b33c": {
+      "file": "audio/8e7a1ffc256e3c1b.mp3",
+      "duration": 5.865
+    },
+    "9965e8e4c2dfa929bdd8021ceda65c39579c3bdebee3bb9bb01f825a04665699": {
+      "file": "audio/9965e8e4c2dfa929.mp3",
+      "duration": 0.835
+    },
+    "0a9d65550be2b24d60df0d3b29359aad66fa2ddf766c84ea9501dc7ad149b25a": {
+      "file": "audio/0a9d65550be2b24d.mp3",
+      "duration": 2.095
+    }
+  }
+}
