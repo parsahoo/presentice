@@ -14,6 +14,7 @@ import {
   nameProblem,
   placeholderName,
   keepHidden,
+  namesForNewText,
   planCount,
 } from '../js/roster.js';
 import { defaultVoices } from '../js/voices.js';
@@ -262,6 +263,32 @@ test('A new text whose names are each used once keeps its names, with nothing ad
   assert.deepEqual(resolveRoster({ speakers: parsed.speakers, names: plan.names, count: 3 }).rows, ['Ana', 'Ben', 'Kai']);
   // One slide title with a colon in a draft is not a presenter.
   assert.deepEqual(labeledNames('Slide 1\nAgenda: Q3 plan.\n\nSlide 2\nThe problem.\n\nSlide 3\nThe fix.'), []);
+});
+
+test('A new text that brings an unknown presenter name is not collapsed into one voice', () => {
+  // What Write my script hands over: two presenters, one of them saved here already.
+  const value = 'Slide 1\nAlex: Good morning everyone.\nSam: We are glad you came.\n\nSlide 2\nAlex: Here is the plan.';
+  const saved = ['Alex'];
+  const { speakers } = parseScript(value, { slideCount: 2, names: saved });
+  assert.deepEqual(speakers, ['Alex'], 'a name used once is not a presenter on its own');
+  const found = labeledNames(value);
+  assert.deepEqual(found, ['Alex', 'Sam']);
+  const names = namesForNewText(found, speakers);
+  assert.deepEqual(names, ['Alex', 'Sam'], 'the names the text labels win');
+
+  const parsed = parseScript(value, { slideCount: 2, names });
+  const roster = resolveRoster({ speakers: parsed.speakers, names, count: null });
+  assert.equal(roster.count, 2);
+  assert.deepEqual(roster.rows, ['Alex', 'Sam']);
+  const played = flattenSentences(applyRoster(parsed, roster));
+  assert.deepEqual(played.map((s) => s.speaker), ['Alex', 'Sam', 'Alex']);
+  assert.deepEqual(played.map((s) => s.text), ['Good morning everyone.', 'We are glad you came.', 'Here is the plan.']);
+  assert.ok(played.every((s) => !/^[\p{L}][\p{L} ]*:/u.test(s.text)), 'no name is left to be read aloud');
+
+  // A text the parser already reads in full keeps the presenters it has.
+  assert.equal(namesForNewText(['Ana', 'Ben'], ['Ana', 'Ben']), null);
+  assert.equal(namesForNewText([], ['Ana']), null);
+  assert.deepEqual(namesForNewText(['A', 'B', 'C', 'D'], []), ['A', 'B', 'C']);
 });
 
 test('Migration: names from the old AI helper do not rename a script without names', () => {

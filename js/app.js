@@ -123,6 +123,17 @@ const app = {
     project.voices = voices;
     saveField('voices', voices);
   },
+  /** The Voice quality, from the Script step or the Presenters panel. */
+  quality: () => tts.getQuality(),
+  setQuality(id) {
+    if (!project || id === tts.getQuality()) return;
+    project.quality = id;
+    saveField('meta', projects.metaOf(project));
+    // Clips made under the other quality stay saved; only what is needed now is made again.
+    tts.setQuality(id);
+    const state = player.getState();
+    if (state.status === 'waiting' || state.status === 'playing') player.dispatch({ type: 'REPLAY' });
+  },
   setVoice(presenter, voice) {
     project.voices = { ...derived.voices, [presenter]: voice };
     saveField('voices', project.voices);
@@ -197,6 +208,8 @@ function refreshDerived() {
 
 function show(name) {
   if (!SCREENS.includes(name)) return;
+  // The app booted, so the static fallback message has done its job.
+  $('#bootFallback')?.remove();
   if (screen === 'script' && name !== 'script') script.flush();
   if (name !== screen) {
     stopVoice();
@@ -248,6 +261,8 @@ async function adopt(next, nextBytes, doc, { fresh = true } = {}) {
   if (docPromise) releaseDocSoon();
   else clearTimeout(docTimer);
   setThumbs(project.thumbs);
+  // The quality this presentation was saved with, before any key is hashed for it.
+  tts.setQuality(project.quality);
   tts.reset({ keepStored: !fresh });
   await tts.useManifest(project.isSample ? projects.SAMPLE.manifest : null).catch((err) => console.warn(err));
   refreshDerived();

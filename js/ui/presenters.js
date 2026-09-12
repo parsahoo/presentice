@@ -2,10 +2,19 @@
 import { $, h, clear } from './dom.js';
 import { VOICES, voiceLabel } from '../voices.js';
 import { playVoice, stopVoice } from './voice-preview.js';
+import { initQuality } from './quality.js';
 
 export function initPresenters({ app }) {
   const dialog = $('#presentersDialog');
   const list = $('#presenterList');
+  const quality = initQuality({
+    group: $('#dialogQualityGroup'),
+    note: $('#dialogQualityNote'),
+    onChange: (id) => {
+      app.setQuality(id);
+      quality.render(app.quality());
+    },
+  });
 
   dialog.addEventListener('close', stopVoice);
 
@@ -45,6 +54,7 @@ export function initPresenters({ app }) {
   return {
     open() {
       render();
+      quality.render(app.quality());
       dialog.showModal();
       list.querySelector('select')?.focus();
     },

@@ -3,6 +3,8 @@ import { $, $$, h, clear, icon } from './dom.js';
 import { wordTimings } from '../sentences.js';
 import { renderSlide, isCancelled, releaseCanvas } from '../pdf.js';
 import { RATES } from '../player-state.js';
+import { etaText } from '../throughput.js';
+import { webGpuAvailable } from '../tts.js';
 
 const ICONS = {
   PREV_SLIDE: ['M18 17l-5-5 5-5', 'M11 17l-5-5 5-5'],
@@ -37,6 +39,11 @@ export function initPractice({ app, player }) {
   let pendingSlide = -1;
   let renderJob = null;
   let lastStatus = null;
+  // Only mention High to someone whose browser can actually run it.
+  let highAvailable = false;
+  webGpuAvailable().then((ok) => {
+    highAvailable = ok;
+  });
 
   // Transport buttons
   for (const btn of $$('#navGroup .tbtn')) {
@@ -329,6 +336,16 @@ export function initPractice({ app, player }) {
   }
 
   // Voice status
+  /**
+   * "Preparing voices: 12/120 sentences, about 4 minutes left". The time appears only
+   * once this engine has finished enough sentences to be measured, never as a guess.
+   */
+  function preparingLabel(status) {
+    if (!status.totalCount) return 'Preparing voices';
+    const left = etaText(status.etaMs);
+    return `Preparing voices: ${status.readyCount}/${status.totalCount} sentences${left ? `, ${left}` : ''}`;
+  }
+
   let lastLive = '';
   function renderStatus(status, state = player.getState()) {
     lastStatus = status;
@@ -361,13 +378,13 @@ export function initPractice({ app, player }) {
         live = label;
       } else if (status.phase === 'loading' || pending > 0) {
         // The model is already on this device: loading it is part of preparing.
-        label = status.totalCount ? `Preparing voices: ${status.readyCount}/${status.totalCount} sentences` : 'Preparing voices';
+        label = preparingLabel(status);
         fraction = status.totalCount ? status.readyCount / status.totalCount : 0;
         live = 'Preparing voices';
       }
     } else if (status.phase === 'ready') {
       if (status.totalCount && status.readyCount < status.totalCount) {
-        label = `Preparing voices: ${status.readyCount}/${status.totalCount} sentences`;
+        label = preparingLabel(status);
         fraction = status.readyCount / status.totalCount;
         live = 'Preparing voices';
       } else {
@@ -385,8 +402,14 @@ export function initPractice({ app, player }) {
       lastLive = live;
       $('#vsLive').textContent = live;
     }
-    const slow = status.device === 'wasm' && status.totalCount > status.readyCount;
-    $('#slowNote').hidden = !slow;
+    const slow = status.quality === 'standard' && status.totalCount > status.readyCount;
+    const slowNote = $('#slowNote');
+    slowNote.hidden = !slow;
+    if (slow) {
+      slowNote.textContent = highAvailable
+        ? 'Standard makes voices slower than real time, so short pauses between sentences are normal. High is faster, under Presenters and voices.'
+        : 'Standard makes voices slower than real time, so short pauses between sentences are normal.';
+    }
     $('#vsAdvice').hidden = status.phase !== 'error';
   }
   $('#vsRetry').addEventListener('click', () => app.retryVoices());

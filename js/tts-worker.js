@@ -72,27 +72,29 @@ async function load(device, dtype) {
   return KokoroTTS.from_pretrained(MODEL_ID, { dtype, device, progress_callback: progressReporter() });
 }
 
-async function init() {
+// The page picks the engine (Voice quality) and never changes it behind the user's
+// back, so a failure here is reported as it is instead of quietly loading something else.
+function loadFailure(device) {
+  return device === 'webgpu'
+    ? 'High quality could not start on this computer. Switch Voice quality to Standard.'
+    : 'The voice engine could not start. Check your connection and try again.';
+}
+
+async function init({ device, dtype }) {
   initPending = true;
-  let device = (await hasWebGpu()) ? 'webgpu' : 'wasm';
-  let dtype = device === 'webgpu' ? 'fp32' : 'q8';
   post({ type: 'backend', device, dtype });
   try {
-    if (!KokoroTTS) ({ KokoroTTS } = await import(KOKORO_URL));
-    try {
-      tts = await load(device, dtype);
-    } catch (err) {
-      if (device !== 'webgpu') throw err;
-      device = 'wasm';
-      dtype = 'q8';
-      post({ type: 'backend', device, dtype });
-      tts = await load(device, dtype);
+    if (device === 'webgpu' && !(await hasWebGpu())) {
+      throw new Error('This browser has no WebGPU adapter.');
     }
+    if (!KokoroTTS) ({ KokoroTTS } = await import(KOKORO_URL));
+    tts = await load(device, dtype);
     initPending = false;
     post({ type: 'ready', device, dtype });
     pump();
   } catch (err) {
-    post({ type: 'error', message: String(err?.message || err) });
+    console.warn('Voice engine load failed', device, dtype, err);
+    post({ type: 'error', message: loadFailure(device) });
   } finally {
     initPending = false;
   }
@@ -126,7 +128,7 @@ async function pump() {
 }
 
 self.onmessage = ({ data }) => {
-  if (data.type === 'init') init();
+  if (data.type === 'init') init(data);
   if (data.type === 'queue') {
     // Replace pending work; the generation in flight (if any) finishes on its own.
     queue = data.jobs.filter((j) => !done.has(j.key));

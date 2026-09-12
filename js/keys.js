@@ -9,8 +9,23 @@ async function sha256Hex(input) {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Key for generated audio: text, voice, dtype and model all change the sound. */
-export function audioKey(text, voice, dtype, modelId = MODEL_ID) {
+/**
+ * Key for generated audio: text, voice, model build (dtype), device and model id all
+ * change the sound, so each combination is cached on its own and none is served for another.
+ * @param {{ dtype: string, device: string }} engine
+ */
+export function audioKey(text, voice, engine, modelId = MODEL_ID) {
+  const { dtype, device } = engine || {};
+  return sha256Hex([normalizeText(text), voice, dtype, device, modelId].join('\n'));
+}
+
+/**
+ * The key the previous released version used, before the device became part of it.
+ * That version picked its engine from the machine, so this key stands for q8 on
+ * WebAssembly or fp32 on WebGPU, which are Standard and High today. js/tts.js carries
+ * such a clip over to the key of the quality that made it instead of making it again.
+ */
+export function legacyAudioKey(text, voice, dtype, modelId = MODEL_ID) {
   return sha256Hex([normalizeText(text), voice, dtype, modelId].join('\n'));
 }
 

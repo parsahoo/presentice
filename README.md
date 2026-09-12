@@ -9,7 +9,7 @@ Rehearse a slide presentation out loud. Drop in your slides, and a natural voice
 ## Quick start
 
 1. Drop your slides as a PDF (up to 60 pages and 50 MB).
-2. Keep the draft script made from your slides, paste your own, or use the free AI chat helper.
+2. Keep the draft script made from your slides, paste your own, copy the prompt into any AI chat, or let Presentice write it with your own free Gemini key.
 3. Press **Start practicing**, then Space to play.
 
 ## Why
@@ -18,7 +18,9 @@ Presenting in a second language, or presenting something that matters (a pitch, 
 
 ## Privacy
 
-Your PDF, your script and the generated audio never leave your device. There is no server, no account, no analytics and no API key. The only network traffic is the app itself, pinned open source libraries and their WebAssembly runtime from jsDelivr, and the open voice model from Hugging Face. Everything you do is saved in your browser (IndexedDB) so you can close the tab and pick up where you left off.
+Your PDF, your script and the generated audio never leave your device. There is no server, no account and no analytics. The only network traffic is the app itself, pinned open source libraries and their WebAssembly runtime from jsDelivr, and the open voice model from Hugging Face.
+
+One part is optional and works differently: if you ask Presentice to write your script, you paste your own free Google Gemini API key. The key stays in this browser, the key and your slide text go to Google and nowhere else, and neither reaches a server of ours. **Remove key** deletes it. Without a key, **Copy prompt** is still there for any AI chat. Everything you do is saved in your browser (IndexedDB) so you can close the tab and pick up where you left off.
 
 Safari may clear site data after 7 days without a visit. Chrome and Edge keep it unless you clear it.
 
@@ -26,8 +28,9 @@ Safari may clear site data after 7 days without a visit. Chrome and Edge keep it
 
 The voices run on your computer with [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M), an open 82 million parameter text to speech model.
 
-- Chrome or Edge with a recent GPU (WebGPU): about 350 MB, once. Voices are generated about as fast as they are spoken.
-- Other browsers and devices (WebAssembly): about 120 MB, once. Voices are generated about 2 times slower than they are spoken, so expect short pauses between sentences at first.
+Everyone starts on **Standard**: about 120 MB, once. It runs on the processor, keeps about 120 MB in the tab, and makes voices about 2.5 times slower than they are spoken, so expect short pauses between sentences at first.
+
+**High** is the other choice under Voice quality, next to the presenter voices. It is about 350 MB, once, and makes voices faster than they are spoken, but it needs WebGPU and about 2 GB of free memory plus more than 1 GB on the graphics card. It stays off until you pick it, because that is more than a laptop with 8 GB of memory can spare. Clips you already made with one setting are kept when you switch, so going back and forth costs nothing.
 
 The browser keeps the model in its cache, so later visits start right away. The sample deck ships with pre-rendered audio and plays immediately.
 
@@ -89,7 +92,7 @@ node --test tests/*.test.js
 
 - `js/pdf.js` reads the PDF with [pdf.js](https://mozilla.github.io/pdf.js/) (`pdfjs-dist@5.4.624`): page text for the draft script, thumbnails, and the large slide.
 - `js/script-parser.js` turns a script (or a messy AI answer) into slides, presenters and paragraphs. `js/sentences.js` splits sentences and estimates word timing.
-- `js/tts-worker.js` runs Kokoro through [kokoro-js](https://www.npmjs.com/package/kokoro-js) (`kokoro-js@1.2.1`) in a Web Worker, one sentence at a time, WebGPU first and WebAssembly as the fallback. kokoro-js downloads the model from the main branch of `onnx-community/Kokoro-82M-v1.0-ONNX` on Hugging Face.
+- `js/tts-worker.js` runs Kokoro through [kokoro-js](https://www.npmjs.com/package/kokoro-js) (`kokoro-js@1.2.1`) in a Web Worker, one sentence at a time, loading exactly the engine your Voice quality asks for (Standard is q8 on WebAssembly, High is fp32 on WebGPU) and never quietly swapping one for the other. kokoro-js downloads the model from the main branch of `onnx-community/Kokoro-82M-v1.0-ONNX` on Hugging Face.
 - `js/tts.js` keeps the generation queue in the order you will hear it and caches every clip by a hash of its text, voice and model settings. Editing one sentence regenerates only that sentence. Changing speed regenerates nothing. The voice model loads only when a sentence has no audio yet, and unloads after 15 seconds with nothing to make, so a rehearsal with all its audio ready stays light on memory. Only the clips around your position are kept in memory; the rest are read back from IndexedDB.
 - `js/player-state.js` is a pure, unit tested reducer for playback. `js/player.js` wires it to one audio element.
 - `scripts/render-audio.mjs` pre-renders the sample deck and the voice previews. Maintainers only.

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "presentice",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["scripts/dev-server.py", "8796"],
+      "port": 8796
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self'; font-src 'self' data: https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.hf.co https://generativelanguage.googleapis.com; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self'; font-src 'self' data: https://cdn.jsdelivr.net; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
 <script src="js/theme.js"></script>
@@ -16,6 +16,10 @@
 <noscript><p class="noscript">Presentice needs JavaScript. Turn it on and reload the page.</p></noscript>
 
 <main id="main">
+
+  <!-- Shown until the app boots. A module that fails to load (a half stale cache after a
+       deploy, for instance) leaves this in place, so the page is never blank and silent. -->
+  <p class="boot" id="bootFallback">Loading Presentice. If this message stays, reload the page.</p>
 
   <!-- Landing -->
   <section id="screen-landing" class="screen landing" aria-labelledby="landingTitle" hidden>
@@ -40,7 +44,7 @@
       <ul class="facts">
         <li><strong>Stays on your device.</strong> Your slides, script and audio never leave this browser.</li>
         <li><strong>Free.</strong> No account, no limits, open source under the MIT license.</li>
-        <li><strong>Voices download once.</strong> About 120 MB. Computers with a strong graphics card get a faster version, about 350 MB.</li>
+        <li><strong>Voices download once.</strong> About 120 MB for Standard. High quality, if you turn it on, is about 350 MB and needs a strong graphics card.</li>
       </ul>
       <p class="fineprint">Works best in Chrome or Edge on a laptop. <a href="https://github.com/parsahoo/presentice" target="_blank" rel="noopener noreferrer">Source on GitHub</a></p>
     </div>
@@ -81,6 +85,11 @@
             </div>
           </div>
           <ul class="pb-rows" id="presenterRows"></ul>
+          <div class="pb-quality">
+            <span class="field-label" id="qualityLabel">Voice quality</span>
+            <div class="segmented" role="group" aria-labelledby="qualityLabel" id="qualityGroup"></div>
+            <p class="quality-note" id="qualityNote"></p>
+          </div>
           <p class="pb-note" id="presenterNote" hidden></p>
         </section>
 
@@ -97,6 +106,21 @@
           <div class="prompt-fallback" id="promptFallback" hidden>
             <label for="promptText">Your browser blocked copying. Press Ctrl+C or Cmd+C to copy the selected prompt.</label>
             <textarea id="promptText" readonly rows="6"></textarea>
+          </div>
+
+          <div class="ai-write">
+            <h3 class="ai-write-title">Or let Presentice write it for you</h3>
+            <p class="ai-write-note">With a free Google Gemini API key. The key stays in this browser, is sent only to Google, and never to any server of ours. <a id="aiKeyLink" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Get a key</a></p>
+            <div class="ai-key-row">
+              <label for="aiKey" class="visually-hidden">Google Gemini API key</label>
+              <input type="password" id="aiKey" class="input" autocomplete="off" spellcheck="false" placeholder="Paste your Gemini API key">
+              <button type="button" class="btn small" id="aiKeyRemove" hidden>Remove key</button>
+            </div>
+            <div class="ai-write-row">
+              <button type="button" class="btn primary small" id="aiWrite">Write my script</button>
+              <button type="button" class="btn small" id="aiUndo" hidden>Undo, put my script back</button>
+              <span class="copy-status" id="aiStatus" aria-live="polite"></span>
+            </div>
           </div>
         </div>
 
@@ -202,6 +226,11 @@ Sam: Most teams rehearse by reading silently.</pre>
   </div>
   <p class="muted">To rename a presenter or change how many there are, go back to Edit script.</p>
   <ul class="presenter-list" id="presenterList"></ul>
+  <div class="pb-quality sheet-quality">
+    <span class="field-label" id="dialogQualityLabel">Voice quality</span>
+    <div class="segmented" role="group" aria-labelledby="dialogQualityLabel" id="dialogQualityGroup"></div>
+    <p class="quality-note" id="dialogQualityNote"></p>
+  </div>
 </dialog>
 
 <dialog id="newDialog" class="modal" aria-labelledby="newTitle">

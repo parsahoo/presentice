@@ -104,6 +104,18 @@ export function planCount({ text, roster, names = [], count }) {
 }
 
 /**
+ * The names a whole new text (a paste, a file, an AI answer) settles on, or null to keep
+ * the presenters already picked. The names the text labels win whenever it labels more of
+ * them than the parser recognized on its own: with one saved name, an answer written for
+ * "Alex:" and "Sam:" would otherwise collapse into Alex alone, with "Sam:" spoken aloud.
+ * @param {string[]} found names labeledNames() read out of the text
+ * @param {string[]} speakers the presenters parseScript() recognized with the saved names
+ */
+export function namesForNewText(found = [], speakers = []) {
+  return found.length > speakers.length ? found.slice(0, MAX_PRESENTERS) : null;
+}
+
+/**
  * Why picking `count` changed nothing: the script itself gives lines to more presenters.
  * @param {{ rows: string[], speakers: string[] }} roster the rows as they would be with that count
  */

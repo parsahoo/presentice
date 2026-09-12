@@ -3,17 +3,19 @@ import { $, h, clear } from './dom.js';
 import { buildPrompt, draftScript, labeledNames } from '../script-parser.js';
 import { stripPua } from '../slide-text.js';
 import {
-  MAX_PRESENTERS,
   placeholderName,
   assignRoundRobin,
   renameSpeaker,
   cleanName,
   nameProblem,
   keepHidden,
+  namesForNewText,
   planCount,
   countBlockedNote,
 } from '../roster.js';
 import { initPresenterRows } from './presenter-rows.js';
+import { initQuality } from './quality.js';
+import { AiError, KEY_PAGE, errorText, loadKey, removeKey, requestScript, saveKey } from '../ai-writer.js';
 
 const MAX_TEXT_FILE = 2 * 1024 * 1024;
 const MAX_UNDO = 20;
@@ -36,6 +38,14 @@ export function initScript({ app }) {
   const aiPanel = $('#aiPanel');
   const aiToggle = $('#aiToggle');
   const pasteStatus = $('#pasteStatus');
+  const keyInput = $('#aiKey');
+  const removeKeyButton = $('#aiKeyRemove');
+  const writeButton = $('#aiWrite');
+  const undoButton = $('#aiUndo');
+  const aiStatus = $('#aiStatus');
+  let writing = false;
+  // The script, presenters and voices an AI answer replaced, for one step back.
+  let beforeWrite = null;
   let current = null; // app.derive() of the text in the textarea
   let loadedFor = null; // the project the textarea holds; nothing is written into another one
   let parseTimer = 0;
@@ -183,6 +193,15 @@ export function initScript({ app }) {
     onPreviewError: () => app.toast('The voice sample could not play.'),
   });
 
+  const quality = initQuality({
+    group: $('#qualityGroup'),
+    note: $('#qualityNote'),
+    onChange: (id) => {
+      app.setQuality(id);
+      quality.render(app.quality());
+    },
+  });
+
   /**
    * A whole new text (paste, file, draft). A script with names follows its names;
    * one without keeps the presenters picked above, sharing the slides in turn.
@@ -191,14 +210,16 @@ export function initScript({ app }) {
   function settleWholeText(value, { fromDraft = false } = {}) {
     const project = app.project();
     const { roster } = app.derive(value);
-    if (roster.speakers.length) {
+    // Lines that carry names ("Ana: Hello." then "Ben: Next part."): those are the presenters,
+    // including the ones the parser did not recognize on its own because they are new here.
+    const found = fromDraft ? [] : labeledNames(value);
+    const adopt = namesForNewText(found, roster.speakers);
+    if (adopt) {
+      app.setNames(adopt);
       if (project.count != null) app.setCount(null);
       return value;
     }
-    // Lines that carry names used only once ("Ana: Hello." then "Ben: Next part."): those are the presenters.
-    const found = fromDraft ? [] : labeledNames(value);
-    if (found.length) {
-      app.setNames(found.slice(0, MAX_PRESENTERS));
+    if (roster.speakers.length) {
       if (project.count != null) app.setCount(null);
       return value;
     }
@@ -222,6 +243,9 @@ export function initScript({ app }) {
     onInput();
   }
 
+  // The "Get a key" link and the request go to one place, named once in js/ai-writer.js.
+  $('#aiKeyLink').href = KEY_PAGE;
+
   aiToggle.addEventListener('click', () => {
     const open = aiPanel.hidden;
     aiPanel.hidden = !open;
@@ -232,12 +256,17 @@ export function initScript({ app }) {
     }
   });
 
-  $('#copyPrompt').addEventListener('click', () => {
+  /** The prompt for both AI paths: the one Copy prompt hands over, and the one we send. */
+  function promptNow() {
     const project = app.project();
     const { roster } = current || fresh();
     // A lone presenter with no name gets no name in the prompt.
     const names = roster.rows.map((r) => (roster.count === 1 && r === placeholderName(0, 1) ? '' : r));
-    const prompt = buildPrompt({ pages: project.pages, count: roster.count, names });
+    return buildPrompt({ pages: project.pages, count: roster.count, names });
+  }
+
+  $('#copyPrompt').addEventListener('click', () => {
+    const prompt = promptNow();
     const status = $('#copyStatus');
     const fallback = () => {
       const box = $('#promptFallback');
@@ -280,6 +309,90 @@ export function initScript({ app }) {
     textarea.focus();
     textarea.select();
     pasteStatus.textContent = 'Press Ctrl+V or Cmd+V to paste.';
+  });
+
+  // Writing the script with the user's own Gemini key. Copy prompt above stays the
+  // path for everyone without one.
+  function forgetWrite() {
+    beforeWrite = null;
+    undoButton.hidden = true;
+  }
+
+  function setWriting(on) {
+    writing = on;
+    writeButton.disabled = on;
+    writeButton.textContent = on ? 'Writing your script' : 'Write my script';
+    if (on) writeButton.setAttribute('aria-busy', 'true');
+    else writeButton.removeAttribute('aria-busy');
+  }
+
+  keyInput.addEventListener('input', () => {
+    removeKeyButton.hidden = !keyInput.value.trim();
+  });
+  // Kept when the field is left or Enter is pressed, not on every keystroke.
+  keyInput.addEventListener('change', () => saveKey(keyInput.value));
+  keyInput.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    saveKey(keyInput.value);
+    writeButton.click();
+  });
+
+  removeKeyButton.addEventListener('click', () => {
+    removeKey();
+    keyInput.value = '';
+    removeKeyButton.hidden = true;
+    aiStatus.textContent = 'Key removed from this browser.';
+    keyInput.focus();
+  });
+
+  writeButton.addEventListener('click', async () => {
+    if (writing || isStale()) return;
+    const key = keyInput.value.trim();
+    if (!key) {
+      aiStatus.textContent = errorText(new AiError('no-key'));
+      keyInput.focus();
+      return;
+    }
+    saveKey(key);
+    const project = app.project();
+    const prompt = promptNow();
+    setWriting(true);
+    aiStatus.textContent = 'Asking Gemini for your script. This takes a few seconds.';
+    let script = null;
+    let failure = null;
+    try {
+      script = await requestScript(prompt, key);
+    } catch (err) {
+      failure = err;
+    }
+    setWriting(false);
+    // Another presentation was opened, or this step was left, while Google answered.
+    if (isStale() || app.project() !== project) return;
+    if (failure) {
+      aiStatus.textContent = errorText(failure);
+      return;
+    }
+    const snap = snapshot();
+    replaceText(script);
+    beforeWrite = snap;
+    undoButton.hidden = false;
+    aiStatus.textContent = 'Gemini replaced your script. Check the preview, or undo.';
+  });
+
+  undoButton.addEventListener('click', () => {
+    const snap = beforeWrite;
+    if (!snap) return;
+    forgetWrite();
+    textarea.value = snap.text;
+    textarea.setSelectionRange(0, 0);
+    textarea.scrollTop = 0;
+    app.setCount(snap.count);
+    app.setNames(snap.names);
+    app.setVoices(snap.voices);
+    queueSave();
+    renderPreview();
+    aiStatus.textContent = 'Your script is back to what it was.';
   });
 
   draftButton.addEventListener('click', () => {
@@ -334,6 +447,8 @@ export function initScript({ app }) {
   }
 
   function onInput() {
+    // An edit of your own is what Undo would otherwise throw away.
+    forgetWrite();
     queueSave();
     schedulePreview();
   }
@@ -425,6 +540,12 @@ export function initScript({ app }) {
       textarea.value = clean;
       draftButton.hidden = Boolean(project.noText);
       pasteStatus.textContent = '';
+      aiStatus.textContent = '';
+      forgetWrite();
+      setWriting(false);
+      keyInput.value = loadKey();
+      removeKeyButton.hidden = !keyInput.value;
+      quality.render(app.quality());
       renderPreview();
     },
     /** Save the text now. Does nothing once another project is open. */

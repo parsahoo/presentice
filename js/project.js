@@ -4,6 +4,7 @@ import { checkFile, openPdf, extractPages, renderThumbs } from './pdf.js';
 import { parseScript, flattenSentences, draftScript } from './script-parser.js';
 import { defaultVoices } from './voices.js';
 import { resolveRoster, applyRoster, migrateNames } from './roster.js';
+import { DEFAULT_QUALITY, normalizeQuality } from './engine-quality.js';
 
 export const SAMPLE = {
   pdf: new URL('../sample/brightside.pdf', import.meta.url).href,
@@ -42,6 +43,7 @@ async function build(bytes, name, onProgress) {
       names: [],
       count: null,
       voices: {},
+      quality: DEFAULT_QUALITY,
       position: {},
       stage: 'script',
     },
@@ -73,7 +75,8 @@ export async function importSample(onProgress) {
 
 export function metaOf(project) {
   const { name, isSample, pageCount, aspect, noText, stage, count = null } = project;
-  return { name, isSample, pageCount, aspect, noText, stage, count };
+  // The Voice quality travels with the presentation, so reopening it sounds the same.
+  return { name, isSample, pageCount, aspect, noText, stage, count, quality: normalizeQuality(project.quality) };
 }
 
 /** Replace whatever is stored with this project, in one transaction. */
@@ -105,6 +108,7 @@ export async function load() {
     bytes: pdf,
     project: {
       ...meta,
+      quality: normalizeQuality(meta.quality),
       pages,
       thumbs: thumbs || [],
       script: script ?? '',

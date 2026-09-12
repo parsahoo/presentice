@@ -103,7 +103,7 @@ code { font-family: var(--mono); font-size: 0.875em; }
   white-space: nowrap;
 }
 .muted { color: var(--ink-2); }
-.noscript { padding: 24px; }
+.noscript, .boot { padding: 24px; }
 .pc-0 { --pc: var(--p0); } .pc-1 { --pc: var(--p1); } .pc-2 { --pc: var(--p2); }
 .pc-3 { --pc: var(--p3); } .pc-4 { --pc: var(--p4); } .pc-5 { --pc: var(--p5); }
 .dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--pc, var(--ink-3)); }
@@ -286,7 +286,21 @@ kbd {
 .presenters-block.is-single .pb-row > .dot { display: none; }
 .presenters-block.is-single .pb-meta, .presenters-block.is-single .pb-problem { grid-column: 1 / -1; }
 
+/* Voice quality: the same control on the Script step and in the Presenters panel. */
+.pb-quality { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 4px 10px; }
+.pb-quality .quality-note { grid-column: 1 / -1; margin: 0; color: var(--ink-3); font-size: 0.75rem; }
+.sheet-quality { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+
 .ai-panel { display: grid; gap: 14px; padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface); }
+/* The second path: a key of your own, under the chat steps that need none. */
+.ai-write { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+.ai-write-title { margin: 0; font-size: 0.875rem; font-weight: 650; }
+.ai-write-note { margin: 0; max-width: 68ch; color: var(--ink-2); font-size: 0.8125rem; }
+.ai-key-row { display: flex; align-items: center; gap: 8px; }
+.ai-key-row .input { flex: 1; min-width: 0; max-width: 360px; font-family: var(--mono); font-size: 0.8125rem; }
+.ai-write-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ai-write-row .copy-status { margin-left: 0; }
+#aiWrite[aria-busy="true"] { cursor: progress; }
 .ai-for { margin: 0; color: var(--ink-2); font-size: 0.875rem; }
 .ai-steps { display: grid; gap: 10px; margin: 0; padding-left: 1.3em; font-size: 0.875rem; }
 .ai-steps li { padding-left: 4px; }
